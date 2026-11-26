@@ -77,7 +77,13 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
   assert.deepEqual(list.runs, [run]);
   assert.deepEqual(list.invalidRuns.map(({ id }) => id), [invalidId]);
   assert.match(list.invalidRuns[0].error, /invalid JSON/);
-  for (const headers of [{ Host: "example.com" }, { Host: `localhost:${server.address().port}` }, { "Sec-Fetch-Site": "cross-site" }]) {
+  const { port } = server.address();
+  for (const [headers, expected] of [
+    ...["127.0.0.1", "localhost", "[::1]"].map((host) => [{ Host: `${host}:${port}` }, 200]),
+    [{ Host: `example.com:${port}` }, 403],
+    [{ Host: "localhost:0" }, 403],
+    [{ "Sec-Fetch-Site": "cross-site" }, 403],
+  ]) {
     const { status, body } = await new Promise((resolve, reject) => {
       get(url + "api/runs", { headers }, (response) => {
         let body = "";
@@ -85,8 +91,8 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
         response.on("end", () => resolve({ status: response.statusCode, body }));
       }).on("error", reject);
     });
-    assert.equal(status, 403);
-    if (headers.Host) assert.match(body, /127\.0\.0\.1 URL printed by alibai open/);
+    assert.equal(status, expected, JSON.stringify(headers));
+    if (expected === 403 && headers.Host) assert.match(body, /127\.0\.0\.1 URL printed by alibai open/);
   }
   assert.equal((await fetch(url + "api/runs", { method: "POST" })).status, 405);
 });
