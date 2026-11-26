@@ -13,7 +13,7 @@ const flagNames = {
   check: ["run", "target", "input", "before", "after", "expected", "error", "result"],
   "run end": ["run", "verdict", "summary"],
   list: [],
-  open: [],
+  open: ["lang"],
 } as const;
 const usage = `Usage
   alibai run start --title <title> [--platform <platform>] [--agent <name>] [--base <ref>]
@@ -22,7 +22,7 @@ const usage = `Usage
                [--expected <json>] [--error <text>] [--result <result>] [--run <id>]
   alibai run end --verdict <result> [--summary <text>] [--run <id>]
   alibai list
-  alibai open
+  alibai open [--lang <en|ko|ja>]
 
 Provide at least one PNG, JPG, JPEG, or WebP screenshot for step.
 Provide --after for check unless recording --error. Results and verdicts are pass, fail, or info.
@@ -82,11 +82,12 @@ async function main(): Promise<void> {
   const unexpected = positionals[first === "run" ? 2 : 1] ?? trailing[0];
   if (unexpected !== undefined) throw new Error(`Unexpected argument "${unexpected}".`);
   const flags = values as Record<string, string | undefined>;
-  const root = gitRoot();
   if (command === "open") {
-    await openViewer(root, json);
+    const lang = flags.lang === undefined ? undefined : choice(flags.lang, "lang", ["en", "ko", "ja"]);
+    await openViewer(gitRoot(), json, lang);
     return;
   }
+  const root = gitRoot();
   const store = new RunStore(root);
   const printMutation = ({ path, run }: { path: string; run: { id: string } }) => {
     console.log(json ? JSON.stringify({ id: run.id, path }) : `${run.id}\t${path}`);

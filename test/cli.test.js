@@ -46,6 +46,14 @@ function assertTimestamp(value) {
   assert.equal(new Date(value).toISOString(), value);
 }
 
+test("CLI validates the viewer language option", (t) => {
+  const cwd = repo(t);
+  fail(cwd, ["open", "--lang", "ja-JP"], /--lang must be one of en, ko, ja/);
+  fail(cwd, ["open", "--lang"], /--lang requires a value/);
+  fail(cwd, ["list", "--lang", "ko"], /Unknown option '--lang'/);
+  assert.match(run(cwd, "open", "--help").usage, /alibai open \[--lang <en\|ko\|ja>\]/);
+});
+
 test("CLI records evidence from a subdirectory and completes the run", (t) => {
   const cwd = repo(t);
   const base = commit(cwd, "base");

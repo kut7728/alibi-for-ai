@@ -1,17 +1,43 @@
 const assert = require("node:assert/strict");
 const { execFile } = require("node:child_process");
-const { cp, mkdir, mkdtemp, rm, symlink, writeFile } = require("node:fs/promises");
+const { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } = require("node:fs/promises");
 const { get } = require("node:http");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { test } = require("node:test");
 const { promisify } = require("node:util");
+const { runInNewContext } = require("node:vm");
 const { startViewer } = require("../dist/viewer");
 const sample = require("../examples/cart-rounding/run.json");
 
 const invalidId = "10000000-0000-0000-0000-000000000000";
 const otherId = "20000000-0000-0000-0000-000000000000";
 const hostileTitle = "<img src=x onerror=alert(1)> Basket";
+const viewer = join(__dirname, "../viewer");
+
+test("viewer dictionaries share keys and interpolation parameters", async () => {
+  const source = await readFile(join(viewer, "messages.js"), "utf8");
+  const { messages, translate } = runInNewContext(source + "\n({ messages, translate })");
+  const keys = Object.keys(messages.en).sort();
+  const parameters = (text) => text.match(/\{\w+\}/g)?.sort() ?? [];
+  for (const locale of ["ko", "ja"]) {
+    assert.deepEqual(Object.keys(messages[locale]).sort(), keys);
+    for (const key of keys) assert.deepEqual(parameters(messages[locale][key]), parameters(messages.en[key]), key);
+  }
+  delete messages.ko.caseFiles;
+  assert.equal(translate("ko", "caseFiles"), "Case files");
+});
+
+test("viewer resolves locale from URL, storage and supported browser language in order", async () => {
+  const source = await readFile(join(viewer, "messages.js"), "utf8");
+  const resolve = runInNewContext(source + "\nresolveLocale");
+  assert.equal(resolve("ja", "ko", ["en-US"]), "ja");
+  assert.equal(resolve("ja-JP", "ko", ["ja-JP"]), "ko");
+  assert.equal(resolve("zz", "xx", ["fr-FR", "ko-KR", "en-US"]), "ko");
+  assert.equal(resolve(null, null, ["de", "ja-JP"]), "ja");
+  assert.equal(resolve(null, null, ["en-GB", "ja-JP"]), "en");
+  assert.equal(resolve("__proto__", "constructor", ["de"]), "en");
+});
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), "alibai-viewer-"));
@@ -36,7 +62,7 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
   assert.match(response.headers.get("content-security-policy"), /script-src 'self'/);
   assert.match(response.headers.get("content-security-policy"), /font-src 'self'/);
   assert.match(await response.text(), /<main id="app"/);
-  for (const asset of ["tokens.css", "viewer.css", "viewer.js"]) {
+  for (const asset of ["tokens.css", "viewer.css", "viewer.js", "messages.js"]) {
     assert.equal((await fetch(url + asset)).status, 200);
   }
   const fonts = ["Sans-Regular", "Sans-SemiBold", "SansCondensed-Bold", "Mono-Regular", "Mono-SemiBold", "Mono-Bold"];
@@ -106,12 +132,12 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
     "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
     "--virtual-time-budget=3000", "--dump-dom", `--user-data-dir=${join(root, profile)}`, url + path,
   ], { timeout: 10000 })).stdout;
-  const list = await dump("", "list-profile");
+  const list = await dump("?lang=en", "list-profile");
   assert.match(list, /1 invalid run skipped/);
   assert.match(list, /&lt;img src=x onerror=alert\(1\)&gt; Basket/);
   assert.doesNotMatch(list, /<img\b/);
   assert.match(list, /Alibi broken/);
-  const detail = await dump(`#case/${sample.id}`, "detail-profile");
+  const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
   assert.match(detail, /type="range"/);
   assert.match(detail, /No screenshot recorded/);
   assert.match(detail, /<pre>null<\/pre>/);
@@ -121,4 +147,20 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(detail, /class="error neutral"/);
   assert.match(detail, /ASSERT_EQ_FAILED/);
   assert.match(detail, /Add Grid Linen.*calcTotal\(items\).*applyCoupon\(code, total\).*Open the basket drawer/s);
+  const [ko, ja] = await Promise.all([
+    dump("?lang=ko#case/" + sample.id, "korean-profile"),
+    dump("?lang=ja#case/" + sample.id, "japanese-profile"),
+  ]);
+  assert.match(ko, /<html lang="ko"/);
+  assert.match(ko, /한국어" aria-pressed="true"/);
+  assert.match(ko, /aria-label="Add Grid Linen to the basket의 변경 전후 비교"/);
+  assert.match(ko, /증거 타임라인/);
+  assert.match(ja, /<html lang="ja"/);
+  assert.match(ja, /日本語" aria-pressed="true"/);
+  assert.match(ja, /証拠のタイムライン/);
+  for (const localized of [ko, ja]) {
+    assert.match(localized, /lang="en">Alibi broken/);
+    assert.match(localized, /ASSERT_EQ_FAILED/);
+    assert.match(localized, new RegExp('title="' + sample.createdAt + '"'));
+  }
 });
