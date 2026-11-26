@@ -1,29 +1,36 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, extname, join } from "node:path";
 import { RunStore } from "./store";
 
 const host = "127.0.0.1";
+const viewerDir = join(__dirname, "..", "viewer");
 const fonts = [
   "IBMPlexSans-Regular-Latin1.woff2", "IBMPlexSans-SemiBold-Latin1.woff2",
   "IBMPlexSansCondensed-Bold-Latin1.woff2",
   "IBMPlexMono-Regular-Latin1.woff2", "IBMPlexMono-SemiBold-Latin1.woff2", "IBMPlexMono-Bold-Latin1.woff2",
 ];
-const assets = new Map([
+const staticAssets = [
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/tokens.css", ["tokens.css", "text/css; charset=utf-8"]],
   ["/viewer.css", ["viewer.css", "text/css; charset=utf-8"]],
+  ["/fonts.css", ["fonts.css", "text/css; charset=utf-8"]],
   ["/viewer.js", ["viewer.js", "text/javascript; charset=utf-8"]],
-  ...fonts.map((file): [string, string[]] => [`/fonts/${file}`, [`fonts/${file}`, "font/woff2"]]),
-]);
+] as const;
+const cjkSubset = /^IBMPlexSans(?:KR-(?:Regular|SemiBold)-\d{2}|JP-(?:Regular|SemiBold)-\d{3})\.woff2$/;
 const imageTypes = new Map([
   [".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".webp", "image/webp"],
 ]);
 
 export async function startViewer(root: string) {
   const store = new RunStore(root);
+  const assets = new Map<string, readonly [string, string]>(staticAssets);
+  const subsets = await readdir(join(viewerDir, "fonts"), { withFileTypes: true });
+  for (const file of [...fonts, ...subsets.filter((entry) => entry.isFile() && cjkSubset.test(entry.name)).map((entry) => entry.name)]) {
+    assets.set(`/fonts/${file}`, [`fonts/${file}`, "font/woff2"]);
+  }
   const server = createServer(async (request, response) => {
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
@@ -50,7 +57,7 @@ export async function startViewer(root: string) {
       const asset = assets.get(path);
       if (asset) {
         const [file, type] = asset;
-        return send(200, type, await readFile(join(__dirname, "..", "viewer", file)));
+        return send(200, type, await readFile(join(viewerDir, file)));
       }
       if (path === "/api/runs") {
         const { runs, invalidRuns } = await store.list();
