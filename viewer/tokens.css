@@ -1,0 +1,66 @@
+/* Alibi for AI — design tokens v0.1 (디자이너봇, 2026-11-26)
+   Concept: case file. Paper + ink neutrals with a cool blue bias,
+   one accent = evidence tape amber. Pass/fail are semantic, not accent.
+   Light is the base; dark redefines tokens only. */
+:root {
+  /* neutrals */
+  --al-paper: #F3F4F7;      /* page background */
+  --al-surface: #FFFFFF;    /* cards, panels */
+  --al-surface-2: #E9ECF1;  /* insets, code, table header */
+  --al-line: #D6DAE2;       /* borders, dividers */
+  --al-ink: #14171D;        /* primary text */
+  --al-ink-2: #4A5161;      /* secondary text */
+  --al-ink-3: #7B8292;      /* captions, meta */
+  /* accent: evidence tape */
+  --al-tape: #F2C230;
+  --al-tape-ink: #2B2200;   /* text on tape */
+  --al-tape-text: #8A6400;  /* tape-colored text on paper (AA) */
+  /* semantic */
+  --al-pass: #1C7F46;
+  --al-pass-bg: #E2F3E8;
+  --al-fail: #C2332A;
+  --al-fail-bg: #FBE5E2;
+  --al-skip: #6B7280;
+  --al-skip-bg: #ECEEF2;
+  --al-diff-del: #FBE5E2;
+  --al-diff-add: #E2F3E8;
+  --al-focus: #2F6FEB;
+  /* type */
+  --al-font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --al-font-label: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --al-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --al-text-xs: 0.75rem;   /* 12 meta, badges */
+  --al-text-sm: 0.8125rem; /* 13 table, code */
+  --al-text-md: 0.9375rem; /* 15 body */
+  --al-text-lg: 1.125rem;  /* 18 card title */
+  --al-text-xl: 1.5rem;    /* 24 case title */
+  --al-text-2xl: 2rem;     /* 32 verdict */
+  /* shape & space (4px grid) */
+  --al-radius-sm: 4px;
+  --al-radius-md: 8px;
+  --al-space-1: 4px; --al-space-2: 8px; --al-space-3: 12px;
+  --al-space-4: 16px; --al-space-5: 24px; --al-space-6: 32px;
+  --al-shadow: 0 1px 0 rgba(20,23,29,.04), 0 2px 8px rgba(20,23,29,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --al-paper: #0E1014; --al-surface: #161A21; --al-surface-2: #1E232C;
+    --al-line: #2A313C; --al-ink: #E7E9EE; --al-ink-2: #A9B0BD; --al-ink-3: #747C8B;
+    --al-tape: #E9B824; --al-tape-ink: #1C1600; --al-tape-text: #E9B824;
+    --al-pass: #52C482; --al-pass-bg: #12301F; --al-fail: #F06A5E; --al-fail-bg: #3B1815;
+    --al-skip: #9AA1AD; --al-skip-bg: #232831;
+    --al-diff-del: #3B1815; --al-diff-add: #12301F; --al-focus: #6E9BFF;
+    --al-shadow: 0 1px 0 rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --al-paper: #0E1014; --al-surface: #161A21; --al-surface-2: #1E232C;
+  --al-line: #2A313C; --al-ink: #E7E9EE; --al-ink-2: #A9B0BD; --al-ink-3: #747C8B;
+  --al-tape: #E9B824; --al-tape-ink: #1C1600; --al-tape-text: #E9B824;
+  --al-pass: #52C482; --al-pass-bg: #12301F; --al-fail: #F06A5E; --al-fail-bg: #3B1815;
+  --al-skip: #9AA1AD; --al-skip-bg: #232831;
+  --al-diff-del: #3B1815; --al-diff-add: #12301F; --al-focus: #6E9BFF;
+  --al-shadow: 0 1px 0 rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.35);
+  color-scheme: dark;
+}

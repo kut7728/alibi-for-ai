@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, open, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { assertRun, parseJson, runId, type Run } from "./report";
@@ -99,6 +99,29 @@ export class RunStore {
     runs.sort((a, b) => b.run.createdAt.localeCompare(a.run.createdAt) || b.run.id.localeCompare(a.run.id));
     invalidRuns.sort((a, b) => a.id.localeCompare(b.id));
     return { runs, invalidRuns };
+  }
+
+  async screenshot(id: string, name: string): Promise<Buffer | undefined> {
+    if (!runId.test(id)) return;
+    const directory = join(this.runs, id);
+    const screenshots = join(directory, "screenshots");
+    try {
+      for (const path of [this.home, this.runs, directory, screenshots]) await requireDirectory(path);
+      const { run } = await this.read(directory, id);
+      const reference = `screenshots/${name}`;
+      if (!run.steps.some(({ before, after }) => before === reference || after === reference)) return;
+      const path = join(screenshots, name);
+      if (!(await lstat(path)).isFile()) return;
+      const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        if ((await file.stat()).isFile()) return await file.readFile();
+      } finally {
+        await file.close();
+      }
+    } catch {
+      // Unreadable reports or images are unavailable to the viewer.
+      return;
+    }
   }
 
   async mutate(

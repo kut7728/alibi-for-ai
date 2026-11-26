@@ -5,7 +5,7 @@
   "bin": {
     "alibai": "dist/cli.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "viewer"],
   "engines": {
     "node": ">=22"
   },
