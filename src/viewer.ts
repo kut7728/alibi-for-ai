@@ -18,6 +18,7 @@ const staticAssets = [
   ["/viewer.css", ["viewer.css", "text/css; charset=utf-8"]],
   ["/fonts.css", ["fonts.css", "text/css; charset=utf-8"]],
   ["/viewer.js", ["viewer.js", "text/javascript; charset=utf-8"]],
+  ["/messages.js", ["messages.js", "text/javascript; charset=utf-8"]],
 ] as const;
 const cjkSubset = /^IBMPlexSans(?:KR-(?:Regular|SemiBold)-\d{2}|JP-(?:Regular|SemiBold)-\d{3})\.woff2$/;
 const imageTypes = new Map([
@@ -84,8 +85,9 @@ export async function startViewer(root: string) {
   return { server, url: `http://${host}:${address.port}/` };
 }
 
-export async function openViewer(root: string, json: boolean): Promise<void> {
-  const { url } = await startViewer(root);
+export async function openViewer(root: string, json: boolean, lang?: string): Promise<void> {
+  const viewer = await startViewer(root);
+  const url = lang ? `${viewer.url}?lang=${encodeURIComponent(lang)}` : viewer.url;
   console.log(json ? JSON.stringify({ url }) : `Alibi viewer: ${url}\nPress Ctrl+C to stop.`);
   const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "rundll32.exe" : "xdg-open";
   const args = process.platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url];

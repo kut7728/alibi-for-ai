@@ -7,17 +7,25 @@
   <link rel="stylesheet" href="/tokens.css">
   <link rel="stylesheet" href="/fonts.css">
   <link rel="stylesheet" href="/viewer.css">
+  <script src="/messages.js" defer></script>
   <script src="/viewer.js" defer></script>
 </head>
 <body>
   <header class="appbar">
     <div class="appbar-inner">
-      <a class="logo" href="#" aria-label="alibai home">alib<b>ai</b></a>
-      <nav aria-label="Breadcrumb"><a href="#">Case files</a><span id="breadcrumb" hidden></span></nav>
+      <a class="logo" href="#">alib<b>ai</b></a>
+      <nav><a href="#" id="case-files"></a><span id="breadcrumb" hidden></span></nav>
       <span class="project" id="project"></span>
-      <button type="button" class="theme" id="theme">Theme: System</button>
+      <div class="preferences">
+        <div class="languages" id="languages" role="group">
+          <button type="button" data-lang="en" lang="en">EN</button>
+          <button type="button" data-lang="ko" lang="ko">한</button>
+          <button type="button" data-lang="ja" lang="ja">日</button>
+        </div>
+        <button type="button" class="theme" id="theme"></button>
+      </div>
     </div>
   </header>
-  <main id="app" aria-busy="true"><p role="status">Loading case files…</p></main>
+  <main id="app" aria-busy="true"><p role="status"></p></main>
 </body>
 </html>
