@@ -2,9 +2,11 @@
 
 ## Commits
 
-- Use Conventional Commits in English. Start the subject after `type(scope):` with a lowercase imperative verb and omit the final period. Example: `docs(docs): document git contribution rules`.
+- Use Conventional Commits in English. Start the description after `type:` or `type(scope):` with a lowercase imperative verb and omit the final period.
 - Use one of these types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `build`, `perf`.
-- Use one of these scopes: `cli`, `format`, `store`, `viewer`, `skill`, `docs`.
+- Scopes are optional. Omit the scope for repository-wide changes, for example `docs: add git contribution rules`.
+- Example scopes include `cli`, `format`, `store`, `viewer`, `skill`, and `docs`.
+- Use a different scope when useful.
 - Keep commits small and coherent. Split implementation, tests, and docs where useful. Avoid WIP and generic review-fix subjects. Tidy the history before pushing.
 
 ## Branches
