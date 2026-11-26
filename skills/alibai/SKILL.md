@@ -15,9 +15,15 @@ git worktree add --detach "$base_worktree" "$base_sha"
 
 Run from the root of the checkout under test (head) and use a temporary directory outside it. For a known pre-change commit, replace the first assignment with `base_sha=$(git rev-parse --verify 'YOUR_REF^{commit}')`, substituting the actual local ref. Use that same SHA for both the run and the detached worktree. If the baseline is unavailable, report the gap and record what you can verify on head.
 
+When authorized, commit the changes under test before starting the run. For a single test commit at HEAD, use its parent with `base_sha=$(git rev-parse HEAD^)`. When testing uncommitted changes, the run records `git.dirty: true`.
+
+Set `--platform flutter` for Flutter on an iOS simulator or Android emulator, `--platform ios` or `--platform android` for the corresponding native app, and `--platform web` for a web app.
+
 Keep all `alibai` commands in the head checkout. Use `--run <id>` for `step`, `check`, and `run end` if other runs may be open.
 
 ## Record each UI action
+
+The detached worktree starts without ignored local prerequisites such as `.env` and `assets/.env.*`. Copy only the files the base app needs, keeping them out of Git and their contents out of screenshots and recorded check values.
 
 ```sh
 (cd "$base_worktree" && npm ci && npm run dev)
@@ -56,6 +62,14 @@ alibai check --target roundSubtotal --input '"invalid"' \
 
 Run both probes again for an exception case. The example assumes base returned JSON `null` and head threw the shown error. For a head exception, pass the observed exception with `--error` and omit `--after`. If base throws or a required value is unavailable, describe the gap in the run summary. Use `null` only for an observed JSON null.
 
+If the requirement is to throw that exception, record the expected error as a JSON string and mark the match as `pass` instead.
+
+```sh
+alibai check --target roundSubtotal --input '"invalid"' --before null \
+  --error 'TypeError: cents must be a number' \
+  --expected '"TypeError: cents must be a number"' --result pass
+```
+
 ## Finish and share the result
 
 ```sh
@@ -63,4 +77,6 @@ alibai run end --verdict fail --summary "Cart rounding passes, but invalid input
 git worktree remove "$base_worktree"
 ```
 
-Use `pass` for verified expectations, `fail` for observed mismatches, and `info` when an observation is inconclusive. Stop the base app before removing its clean worktree. Give the requester the run ID, verdict, and one-line summary, then tell them to run `alibai open` from head to view the evidence.
+Use `pass` for verified expectations, `fail` for observed mismatches, and `info` when an observation is inconclusive. Keep `--summary` to one non-empty line. Stop the base app before removing its clean worktree.
+
+Give the requester the run ID, verdict, and summary. From head, `alibai open` opens the default browser and serves the evidence until `Ctrl+C`.
