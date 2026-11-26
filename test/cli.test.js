@@ -208,6 +208,8 @@ test("bad flags and copy or write failures leave the existing record intact", (t
   const screenshots = join(dirname(path), "screenshots");
   writeFileSync(join(cwd, "ok.png"), "test image");
   fail(cwd, ["step", "--action", "Tap"], /at least one screenshot/);
+  fail(cwd, ["step", "--action", "Tap", "--before", "ok.png", "--after", "unsupported.svg"],
+    /Screenshot must use a PNG, JPG, JPEG, or WebP extension/);
   fail(cwd, ["step", "--action", "Tap", "--before", "ok.png", "--after", "absent.png"], /Screenshot was not found/);
   fail(cwd, ["check", "--target", "T", "--input", "nope", "--before", "null", "--after", "null"], /--input: invalid JSON/);
   fail(cwd, ["run", "end", "--verdict", "pass", "--summary", "two\nlines"], /one non-empty line/);

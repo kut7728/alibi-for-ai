@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
+import { extname } from "node:path";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { gitMetadata, gitRoot } from "./git";
 import { parseJson, type Platform, type Result, type Step } from "./report";
@@ -20,7 +21,7 @@ const usage = `Usage
   alibai run end --verdict <result> [--summary <text>] [--run <id>]
   alibai list
 
-Provide at least one screenshot for step.
+Provide at least one PNG, JPG, JPEG, or WebP screenshot for step.
 Provide --after for check unless recording --error. Results and verdicts are pass, fail, or info.
 Add --json to any command for machine-readable output.`;
 
@@ -120,6 +121,11 @@ async function main(): Promise<void> {
       const result = choice(flags.result ?? "info", "result", results);
       if (flags.before === undefined && flags.after === undefined) {
         throw new Error("Provide at least one screenshot with --before or --after.");
+      }
+      for (const source of [flags.before, flags.after]) {
+        if (source !== undefined && !/^\.(?:png|jpe?g|webp)$/i.test(extname(source))) {
+          throw new Error(`Screenshot must use a PNG, JPG, JPEG, or WebP extension: ${source}`);
+        }
       }
       printMutation(await store.mutate(await selectRun(), async (run, screenshot) => {
         const step: Step = {

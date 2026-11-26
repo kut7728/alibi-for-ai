@@ -147,8 +147,7 @@ export class RunStore {
         });
         if (!sourceStat.isFile()) throw new Error(`Screenshot must be a regular file: ${source}`);
         await requireDirectory(join(directory, "screenshots"));
-        const extension = extname(source);
-        const relative = `screenshots/${name}${/^\.[a-z0-9]+$/i.test(extension) ? extension : ""}`;
+        const relative = `screenshots/${name}${extname(source).toLowerCase()}`;
         const destination = join(directory, relative);
         await copyFile(source, destination, constants.COPYFILE_EXCL);
         copied.push(destination);
