@@ -27,7 +27,7 @@ export function gitRoot(): string {
 export function gitMetadata(base?: string): GitMetadata {
   const branch = git("symbolic-ref", "--quiet", "HEAD")?.replace(/^refs\/heads\//, "") ?? null;
   const headSha = git("rev-parse", "--verify", "HEAD^{commit}");
-  const status = git("status", "--porcelain=v1", "--untracked-files=normal");
+  const status = git("--no-optional-locks", "status", "--porcelain=v1", "--untracked-files=normal");
   if (status === null) throw new Error("Could not read Git working tree status.");
   const dirty = status.length > 0;
   if (base !== undefined) {
