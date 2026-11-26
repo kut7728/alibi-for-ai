@@ -2,6 +2,7 @@
   "name": "alibai",
   "version": "0.1.0",
   "description": "Record local test evidence for AI coding agents",
+  "license": "MIT",
   "bin": {
     "alibai": "dist/cli.js"
   },
