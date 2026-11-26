@@ -1,3 +1,40 @@
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-Regular-Latin1.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-SemiBold-Latin1.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans Condensed";
+  src: url("/fonts/IBMPlexSansCondensed-Bold-Latin1.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-Regular-Latin1.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-SemiBold-Latin1.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-Bold-Latin1.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --al-font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
   --al-font-label: "IBM Plex Sans Condensed", "Aptos Narrow", "Arial Narrow", var(--al-font-sans);

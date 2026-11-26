@@ -6,11 +6,17 @@ import { basename, extname, join } from "node:path";
 import { RunStore } from "./store";
 
 const host = "127.0.0.1";
+const fonts = [
+  "IBMPlexSans-Regular-Latin1.woff2", "IBMPlexSans-SemiBold-Latin1.woff2",
+  "IBMPlexSansCondensed-Bold-Latin1.woff2",
+  "IBMPlexMono-Regular-Latin1.woff2", "IBMPlexMono-SemiBold-Latin1.woff2", "IBMPlexMono-Bold-Latin1.woff2",
+];
 const assets = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/tokens.css", ["tokens.css", "text/css; charset=utf-8"]],
   ["/viewer.css", ["viewer.css", "text/css; charset=utf-8"]],
   ["/viewer.js", ["viewer.js", "text/javascript; charset=utf-8"]],
+  ...fonts.map((file): [string, string[]] => [`/fonts/${file}`, [`fonts/${file}`, "font/woff2"]]),
 ]);
 const imageTypes = new Map([
   [".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".webp", "image/webp"],
@@ -23,7 +29,7 @@ export async function startViewer(root: string) {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
     response.setHeader("Content-Security-Policy",
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
+      "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
     const send = (status: number, type: string, body: string | Buffer) => {
       response.writeHead(status, { "Content-Type": type });
       response.end(body);
