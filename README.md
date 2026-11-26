@@ -71,7 +71,7 @@ alibai check --target parseAge --input '"invalid"' --before null --error TypeErr
 
 뷰어 상단의 EN / 한 / 日 버튼으로 언어를 바꿀 수 있습니다. 처음 열 때 언어를 지정하려면 `alibai open --lang ko`처럼 `en`, `ko`, `ja` 중 하나를 전달합니다. 주소의 `lang` 값, 같은 뷰어 주소에 저장된 선택, 브라우저의 언어 설정 순으로 적용하며 기본값은 영어입니다.
 
-실제 증거와 별도로 예제를 보려면 이 저장소에서 다음을 실행합니다. 예제에는 가상의 상점과 테스트 데이터만 들어 있습니다.
+[브라우저 데모](https://kut7728.github.io/alibi-for-ai/)에서 설치 없이 가상 상점의 장바구니 기록을 둘러볼 수 있습니다. 로컬 뷰어에서 같은 예제를 보려면 이 저장소에서 다음을 실행합니다.
 
 ```sh
 example_root="$(mktemp -d)"

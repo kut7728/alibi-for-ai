@@ -13,7 +13,7 @@
   "platform": "web",
   "agent": "Example agent",
   "verdict": "fail",
-  "summary": "The basket total rounds correctly, but the 10% coupon still rounds one cent high.",
+  "summary": "Basket subtotals round correctly. Applying SAVE10 to Grid Linen shows $18.00 at checkout instead of $17.99.",
   "steps": [
     {
       "id": "52ce7fd4-f24a-4523-876a-c347f3568270",
@@ -30,9 +30,20 @@
       "order": 2,
       "action": "Open the basket drawer",
       "createdAt": "2026-11-26T04:05:03.100Z",
+      "before": "screenshots/after.png",
       "after": "screenshots/cart.png",
-      "note": "The line item and subtotal are visible in the drawer.",
+      "note": "The drawer shows one Grid Linen and a $19.99 subtotal, with a field for a coupon.",
       "result": "pass"
+    },
+    {
+      "id": "52ce7fd4-f24a-4523-876a-c347f3568272",
+      "order": 3,
+      "action": "Apply the SAVE10 coupon",
+      "createdAt": "2026-11-26T04:05:07.100Z",
+      "before": "screenshots/cart.png",
+      "after": "screenshots/coupon.png",
+      "note": "The drawer accepts SAVE10 but deducts $1.99. The expected discount is $2.00.",
+      "result": "fail"
     }
   ],
   "checks": [
@@ -49,18 +60,18 @@
     {
       "id": "79233e80-615d-434c-bd99-431d36cb6331",
       "target": "applyCoupon(code, total)",
-      "createdAt": "2026-11-26T04:05:02.600Z",
-      "input": ["SAVE10", 59.97],
-      "before": 53.973,
-      "after": 53.98,
-      "expected": 53.97,
+      "createdAt": "2026-11-26T04:05:07.600Z",
+      "input": ["SAVE10", 19.99],
+      "before": 17.991,
+      "after": 18.00,
+      "expected": 17.99,
       "error": "ASSERT_EQ_FAILED",
       "result": "fail"
     },
     {
       "id": "79233e80-615d-434c-bd99-431d36cb6332",
       "target": "parseCoupon(code)",
-      "createdAt": "2026-11-26T04:05:04.000Z",
+      "createdAt": "2026-11-26T04:05:08.000Z",
       "input": "",
       "before": null,
       "error": "TypeError: coupon code is empty",

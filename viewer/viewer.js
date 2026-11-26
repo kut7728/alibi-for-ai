@@ -335,7 +335,7 @@ function renderScreenshots(runId, step) {
       draw();
       if (hadFocus) screenshots.focus();
     }, { once: true });
-    img.src = `/screenshots/${runId}/${encodeURIComponent(step[side].split("/")[1])}`;
+    img.src = `./screenshots/${runId}/${encodeURIComponent(step[side].split("/")[1])}`;
     return img;
   }
 
@@ -434,7 +434,7 @@ function render(moveFocus = false) {
 }
 
 window.addEventListener("hashchange", () => render(true));
-fetch("/api/runs")
+fetch(document.documentElement.dataset.runsUrl ?? "./api/runs")
   .then((response) => {
     if (!response.ok) throw new Error(String(response.status));
     return response.json();
