@@ -26,6 +26,7 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm ci
+      - run: npm test
       - run: npm run build:pages
       - uses: actions/upload-pages-artifact@v4
         with:
