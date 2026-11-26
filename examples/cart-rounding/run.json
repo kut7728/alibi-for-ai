@@ -1,0 +1,70 @@
+{
+  "formatVersion": 1,
+  "id": "8b37f2ac-7506-4585-9d86-4a0e21c44c12",
+  "title": "Basket totals after rounding",
+  "createdAt": "2026-11-26T04:05:00.000Z",
+  "endedAt": "2026-11-26T04:05:48.000Z",
+  "git": {
+    "branch": "fix/cart-rounding",
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "dirty": true
+  },
+  "platform": "web",
+  "agent": "Example agent",
+  "verdict": "fail",
+  "summary": "The basket total rounds correctly, but the 10% coupon still rounds one cent high.",
+  "steps": [
+    {
+      "id": "52ce7fd4-f24a-4523-876a-c347f3568270",
+      "order": 1,
+      "action": "Add Grid Linen to the basket",
+      "createdAt": "2026-11-26T04:05:00.800Z",
+      "before": "screenshots/before.png",
+      "after": "screenshots/after.png",
+      "note": "The basket count increases and the confirmation appears.",
+      "result": "pass"
+    },
+    {
+      "id": "52ce7fd4-f24a-4523-876a-c347f3568271",
+      "order": 2,
+      "action": "Open the basket drawer",
+      "createdAt": "2026-11-26T04:05:03.100Z",
+      "after": "screenshots/cart.png",
+      "note": "The line item and subtotal are visible in the drawer.",
+      "result": "pass"
+    }
+  ],
+  "checks": [
+    {
+      "id": "79233e80-615d-434c-bd99-431d36cb6330",
+      "target": "calcTotal(items)",
+      "createdAt": "2026-11-26T04:05:01.400Z",
+      "input": [19.99, 19.99, 19.99],
+      "before": 59.96999999999999,
+      "after": 59.97,
+      "expected": 59.97,
+      "result": "pass"
+    },
+    {
+      "id": "79233e80-615d-434c-bd99-431d36cb6331",
+      "target": "applyCoupon(code, total)",
+      "createdAt": "2026-11-26T04:05:02.600Z",
+      "input": ["SAVE10", 59.97],
+      "before": 53.973,
+      "after": 53.98,
+      "expected": 53.97,
+      "error": "ASSERT_EQ_FAILED",
+      "result": "fail"
+    },
+    {
+      "id": "79233e80-615d-434c-bd99-431d36cb6332",
+      "target": "parseCoupon(code)",
+      "createdAt": "2026-11-26T04:05:04.000Z",
+      "input": "",
+      "before": null,
+      "error": "TypeError: coupon code is empty",
+      "result": "info"
+    }
+  ]
+}
