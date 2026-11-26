@@ -186,6 +186,21 @@ test("a timed-out writer leaves the lock untouched and reports manual recovery",
   assert.equal(read(path).verdict, undefined);
 });
 
+test("global flags are recognized only in option positions", (t) => {
+  const cwd = repo(t);
+  const started = run(cwd, "run", "start", "--title=--json", "--agent", "--help");
+  assert.equal(read(started.path).title, "--json");
+  assert.equal(read(started.path).agent, "--help");
+  const help = run(cwd, "step", "-h");
+  assert.match(help.usage, /^Usage/);
+  const literal = spawnSync(process.execPath, [cli, "run", "start", "--title", "--json"], {
+    cwd, encoding: "utf8",
+  });
+  assert.equal(literal.status, 0);
+  assert.equal(read(literal.stdout.trim().split("\t")[1]).title, "--json");
+  fail(cwd, ["list", "--", "--help", "--json"], /Unexpected argument "--help"/);
+});
+
 test("bad flags and copy or write failures leave the existing record intact", (t) => {
   const cwd = repo(t);
   const { path } = run(cwd, "run", "start", "--title", "Failure cases");

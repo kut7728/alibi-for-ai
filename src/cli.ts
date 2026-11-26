@@ -26,6 +26,11 @@ Add --json to any command for machine-readable output.`;
 
 const platforms: readonly Platform[] = ["flutter", "ios", "android", "web"];
 const results: readonly Result[] = ["pass", "fail", "info"];
+const options: ParseArgsOptionsConfig = {
+  ...Object.fromEntries(Object.values(flagNames).flat().map((flag) => [flag, { type: "string" }])),
+  json: { type: "boolean" },
+  help: { type: "boolean", short: "h" },
+};
 
 function textFlag(value: string | undefined, flag: string): string {
   const trimmed = value?.trim();
@@ -39,21 +44,39 @@ function choice<T extends string>(value: string | undefined, flag: string, allow
   return selected;
 }
 
-async function main(args: string[]): Promise<void> {
-  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+const args = process.argv.slice(2);
+const terminator = args.indexOf("--");
+const trailing = terminator === -1 ? [] : args.slice(terminator + 1);
+const { values, positionals } = parseArgs({
+  args: terminator === -1 ? args : args.slice(0, terminator),
+  options,
+  strict: false,
+  allowPositionals: true,
+});
+const json = values.json === true;
+
+async function main(): Promise<void> {
+  for (const flag of ["json", "help"]) {
+    if (typeof values[flag] === "string") throw new Error(`--${flag} does not take a value.`);
+  }
+  const optionNames = Object.keys(values).filter((flag) => flag !== "json" && flag !== "help");
+  if (values.help === true || (positionals.length === 0 && trailing.length === 0 && optionNames.length === 0)) {
     console.log(json ? JSON.stringify({ usage }) : usage);
     return;
   }
 
-  const first = args.shift();
-  const command = first === "run" ? `run ${args.shift() ?? ""}` : first;
+  const [first, second] = positionals;
+  const command = first === "run" ? `run ${second ?? ""}` : first;
   if (!command || !Object.hasOwn(flagNames, command)) {
     throw new Error(`Unknown command "${command?.trim()}". See alibai --help.`);
   }
-  const options: ParseArgsOptionsConfig = Object.fromEntries(
-    flagNames[command as keyof typeof flagNames].map((flag) => [flag, { type: "string" }]),
-  );
-  const { values } = parseArgs({ args, options });
+  const allowed: readonly string[] = flagNames[command as keyof typeof flagNames];
+  for (const flag of optionNames) {
+    if (!allowed.includes(flag)) throw new Error(`Unknown option '--${flag}'.`);
+    if (typeof values[flag] !== "string") throw new Error(`--${flag} requires a value.`);
+  }
+  const unexpected = positionals[first === "run" ? 2 : 1] ?? trailing[0];
+  if (unexpected !== undefined) throw new Error(`Unexpected argument "${unexpected}".`);
   const flags = values as Record<string, string | undefined>;
   const store = new RunStore(gitRoot());
   const printMutation = ({ path, run }: { path: string; run: { id: string } }) => {
@@ -156,9 +179,7 @@ async function main(args: string[]): Promise<void> {
   }
 }
 
-const args = process.argv.slice(2);
-const json = args.includes("--json");
-main(args.filter((arg) => arg !== "--json")).catch((error: Error) => {
+main().catch((error: Error) => {
   console.error(json ? JSON.stringify({ error: error.message }) : `alibai: ${error.message}`);
   process.exitCode = 1;
 });
