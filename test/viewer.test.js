@@ -24,15 +24,23 @@ test("viewer dictionaries share keys and interpolation parameters", async () => 
     assert.deepEqual(Object.keys(messages[locale]).sort(), keys);
     for (const key of keys) assert.deepEqual(parameters(messages[locale][key]), parameters(messages.en[key]), key);
   }
+  assert.equal(translate("ko", "caseFiles"), messages.ko.caseFiles);
   delete messages.ko.caseFiles;
   assert.equal(translate("ko", "caseFiles"), "Case files");
+  delete messages.en.caseFiles;
+  assert.equal(translate("ko", "caseFiles"), "caseFiles");
+  assert.equal(translate("ko", "constructor"), "constructor");
 });
 
 test("viewer resolves locale from URL, storage and supported browser language in order", async () => {
   const source = await readFile(join(viewer, "messages.js"), "utf8");
   const resolve = runInNewContext(source + "\nresolveLocale");
   assert.equal(resolve("ja", "ko", ["en-US"]), "ja");
-  assert.equal(resolve("ja-JP", "ko", ["ja-JP"]), "ko");
+  assert.equal(resolve("KO", "ja", ["en-US"]), "ko");
+  assert.equal(resolve("kO-Kr", "ja", ["en-US"]), "ko");
+  assert.equal(resolve("ja-JP", "ko", ["en-US"]), "ja");
+  assert.equal(resolve("ko-", "ja", ["en-US"]), "ja");
+  assert.equal(resolve("fr-FR", "ko", ["ja-JP"]), "ko");
   assert.equal(resolve("zz", "xx", ["fr-FR", "ko-KR", "en-US"]), "ko");
   assert.equal(resolve(null, null, ["de", "ja-JP"]), "ja");
   assert.equal(resolve(null, null, ["en-GB", "ja-JP"]), "en");
@@ -162,8 +170,8 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(detail, /ASSERT_EQ_FAILED/);
   assert.match(detail, /Add Grid Linen.*calcTotal\(items\).*applyCoupon\(code, total\).*Open the basket drawer/s);
   const [ko, ja] = await Promise.all([
-    dump("?lang=ko#case/" + sample.id, "korean-profile"),
-    dump("?lang=ja#case/" + sample.id, "japanese-profile"),
+    dump("?lang=KO-kr#case/" + sample.id, "korean-profile"),
+    dump("?lang=ja-JP#case/" + sample.id, "japanese-profile"),
   ]);
   assert.match(ko, /<html lang="ko"/);
   assert.match(ko, /한국어" aria-pressed="true"/);

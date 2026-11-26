@@ -211,11 +211,17 @@ const messages = {
 };
 
 function resolveLocale(requested, saved, browserLanguages) {
-  return [requested, saved, ...browserLanguages.map((tag) => tag.split("-")[0].toLowerCase())]
+  let requestedLocale;
+  try {
+    if (requested) requestedLocale = new Intl.Locale(requested).language;
+  } catch { /* Ignore malformed URL language tags. */ }
+  return [requestedLocale, saved, ...browserLanguages.map((tag) => tag.split("-")[0].toLowerCase())]
     .find((locale) => Object.hasOwn(messages, locale)) ?? "en";
 }
 
 function translate(locale, key, values = {}) {
-  const template = messages[locale]?.[key] ?? messages.en[key];
-  return template.replace(/\{(\w+)\}/g, (_, name) => values[name]);
+  const dictionary = Object.hasOwn(messages, locale) ? messages[locale] : messages.en;
+  const template = Object.hasOwn(dictionary, key) ? dictionary[key]
+    : Object.hasOwn(messages.en, key) ? messages.en[key] : undefined;
+  return template?.replace(/\{(\w+)\}/g, (_, name) => values[name]) ?? key;
 }
