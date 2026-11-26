@@ -72,7 +72,7 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
   assert.match(response.headers.get("content-security-policy"), /img-src 'self'/);
   const html = await response.text();
   assert.match(html, /<main id="app"/);
-  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\.\/favicon\.svg">/);
   for (const asset of ["tokens.css", "viewer.css", "viewer.js", "messages.js"]) {
     assert.equal((await fetch(url + asset)).status, 200);
   }
@@ -150,6 +150,7 @@ test("viewer serves only supported referenced images inside their owning run", a
 const chromium = process.env.ALIBAI_TEST_CHROMIUM;
 test("viewer renders case files and exhibits in Chromium", { skip: !chromium, timeout: 25000 }, async (t) => {
   const { url, root, runs, run, directory } = await fixture(t);
+  delete run.steps[1].before;
   run.checks.push({ ...run.checks.at(-1), id: otherId, target: "parseOptionalCoupon(code)", expected: null });
   await writeFile(join(directory, "run.json"), JSON.stringify(run));
   const localhostUrl = url.replace("127.0.0.1", "localhost");
@@ -173,7 +174,7 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(detail, /class="undefined"/);
   assert.match(detail, /class="error neutral"/);
   assert.match(detail, /ASSERT_EQ_FAILED/);
-  assert.match(detail, /Add Grid Linen.*calcTotal\(items\).*applyCoupon\(code, total\).*Open the basket drawer/s);
+  assert.match(detail, /Add Grid Linen.*calcTotal\(items\).*Open the basket drawer.*Apply the SAVE10 coupon.*applyCoupon\(code, total\)/s);
   const [ko, ja] = await Promise.all([
     dump("?lang=KO-kr#case/" + sample.id, "korean-profile"),
     dump("?lang=ja-JP#case/" + sample.id, "japanese-profile"),

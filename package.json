@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:pages": "npm run build && node scripts/build-pages.js",
     "test": "npm run build && node --test",
     "prepack": "npm run build"
   },
