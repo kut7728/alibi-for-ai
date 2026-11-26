@@ -57,6 +57,7 @@ const messages = {
     before: "Before",
     after: "After",
     expected: "Expected",
+    noExpectation: "No expectation set",
     screenshotError: "Screenshot could not load",
     noScreenshot: "No screenshot recorded",
     screenshotAlt: "{label} — {action}",
@@ -126,6 +127,7 @@ const messages = {
     before: "변경 전",
     after: "변경 후",
     expected: "기댓값",
+    noExpectation: "기댓값이 설정되지 않음",
     screenshotError: "스크린샷을 불러오지 못했습니다",
     noScreenshot: "기록된 스크린샷 없음",
     screenshotAlt: "{label} — {action}",
@@ -195,6 +197,7 @@ const messages = {
     before: "変更前",
     after: "変更後",
     expected: "期待値",
+    noExpectation: "期待値が設定されていません",
     screenshotError: "スクリーンショットを読み込めませんでした",
     noScreenshot: "スクリーンショットの記録なし",
     screenshotAlt: "{label} — {action}",
@@ -211,11 +214,17 @@ const messages = {
 };
 
 function resolveLocale(requested, saved, browserLanguages) {
-  return [requested, saved, ...browserLanguages.map((tag) => tag.split("-")[0].toLowerCase())]
+  let requestedLocale;
+  try {
+    if (requested) requestedLocale = new Intl.Locale(requested).language;
+  } catch { /* Ignore malformed URL language tags. */ }
+  return [requestedLocale, saved, ...browserLanguages.map((tag) => tag.split("-")[0].toLowerCase())]
     .find((locale) => Object.hasOwn(messages, locale)) ?? "en";
 }
 
 function translate(locale, key, values = {}) {
-  const template = messages[locale]?.[key] ?? messages.en[key];
-  return template.replace(/\{(\w+)\}/g, (_, name) => values[name]);
+  const dictionary = Object.hasOwn(messages, locale) ? messages[locale] : messages.en;
+  const template = Object.hasOwn(dictionary, key) ? dictionary[key]
+    : Object.hasOwn(messages.en, key) ? messages.en[key] : undefined;
+  return template?.replace(/\{(\w+)\}/g, (_, name) => values[name]) ?? key;
 }

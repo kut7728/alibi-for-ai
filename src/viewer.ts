@@ -13,6 +13,7 @@ const fonts = [
 ];
 const assets = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
+  ["/favicon.svg", ["favicon.svg", "image/svg+xml"]],
   ["/tokens.css", ["tokens.css", "text/css; charset=utf-8"]],
   ["/viewer.css", ["viewer.css", "text/css; charset=utf-8"]],
   ["/viewer.js", ["viewer.js", "text/javascript; charset=utf-8"]],
@@ -37,7 +38,8 @@ export async function startViewer(root: string) {
     };
     const text = (status: number, message: string) => send(status, "text/plain; charset=utf-8", message);
     const address = server.address();
-    if (!address || typeof address === "string" || request.headers.host !== `${host}:${address.port}`) {
+    if (!address || typeof address === "string" ||
+        ![host, "localhost", "[::1]"].some((name) => request.headers.host === `${name}:${address.port}`)) {
       return text(403, "Forbidden. Open the 127.0.0.1 URL printed by alibai open.");
     }
     if (request.method !== "GET") {
