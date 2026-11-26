@@ -15,12 +15,13 @@ const flagNames = {
 const usage = `Usage
   alibai run start --title <title> [--platform <platform>] [--agent <name>] [--base <ref>]
   alibai step --action <action> [--before <file>] [--after <file>] [--note <text>] [--result <result>] [--run <id>]
-  alibai check --target <target> --input <json> --before <json> --after <json>
+  alibai check --target <target> --input <json> --before <json> [--after <json>]
                [--expected <json>] [--error <text>] [--result <result>] [--run <id>]
   alibai run end --verdict <result> [--summary <text>] [--run <id>]
   alibai list
 
-Provide at least one screenshot for step. Results and verdicts are pass, fail, or info.
+Provide at least one screenshot for step.
+Provide --after for check unless recording --error. Results and verdicts are pass, fail, or info.
 Add --json to any command for machine-readable output.`;
 
 const platforms: readonly Platform[] = ["flutter", "ios", "android", "web"];
@@ -85,7 +86,10 @@ async function main(args: string[]): Promise<void> {
         throw new Error("Provide at least one screenshot with --before or --after.");
       }
       printMutation(await store.mutate(flags.run, async (run, screenshot) => {
-        const step: Step = { id: randomUUID(), order: run.steps.length + 1, action, note: flags.note ?? "", result };
+        const step: Step = {
+          id: randomUUID(), order: run.steps.length + 1, action, createdAt: new Date().toISOString(),
+          note: flags.note ?? "", result,
+        };
         if (flags.before !== undefined) step.before = await screenshot(flags.before, `${step.id}-before`);
         if (flags.after !== undefined) step.after = await screenshot(flags.after, `${step.id}-after`);
         run.steps.push(step);
@@ -96,12 +100,14 @@ async function main(args: string[]): Promise<void> {
       const target = textFlag(flags.target, "target");
       const input = parseJson(textFlag(flags.input, "input"), "--input");
       const before = parseJson(textFlag(flags.before, "before"), "--before");
-      const after = parseJson(textFlag(flags.after, "after"), "--after");
       const expected = flags.expected === undefined ? undefined : parseJson(flags.expected, "--expected");
       const error = flags.error === undefined ? undefined : textFlag(flags.error, "error");
+      const outcome = flags.after === undefined && error !== undefined
+        ? { error }
+        : { after: parseJson(textFlag(flags.after, "after"), "--after"), error };
       const result = choice(flags.result ?? "info", "result", results);
       printMutation(await store.mutate(flags.run, async (run) => {
-        run.checks.push({ id: randomUUID(), target, input, before, after, expected, error, result });
+        run.checks.push({ id: randomUUID(), target, createdAt: new Date().toISOString(), input, before, expected, result, ...outcome });
       }));
       break;
     }
@@ -114,6 +120,7 @@ async function main(args: string[]): Promise<void> {
       printMutation(await store.mutate(flags.run, async (run) => {
         run.verdict = verdict;
         run.summary = summary.trim();
+        run.endedAt = new Date().toISOString();
       }));
       break;
     }

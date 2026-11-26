@@ -6,13 +6,15 @@
   "required": ["formatVersion", "id", "title", "createdAt", "git", "platform", "steps", "checks"],
   "dependentRequired": {
     "verdict": ["summary"],
-    "summary": ["verdict"]
+    "summary": ["verdict"],
+    "endedAt": ["verdict"]
   },
   "properties": {
     "formatVersion": { "const": 1 },
     "id": { "$ref": "#/$defs/id" },
     "title": { "$ref": "#/$defs/text" },
-    "createdAt": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
+    "createdAt": { "$ref": "#/$defs/timestamp" },
+    "endedAt": { "$ref": "#/$defs/timestamp" },
     "git": {
       "type": "object",
       "additionalProperties": false,
@@ -20,7 +22,8 @@
       "properties": {
         "branch": { "type": ["string", "null"], "minLength": 1 },
         "baseSha": { "$ref": "#/$defs/sha" },
-        "headSha": { "$ref": "#/$defs/sha" }
+        "headSha": { "$ref": "#/$defs/sha" },
+        "dirty": { "type": "boolean" }
       }
     },
     "agent": { "$ref": "#/$defs/text" },
@@ -42,6 +45,7 @@
   "$defs": {
     "id": { "type": "string", "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$" },
     "text": { "type": "string", "pattern": "\\S" },
+    "timestamp": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
     "sha": { "type": ["string", "null"], "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
     "result": { "enum": ["pass", "fail", "info"] },
     "screenshot": { "type": "string", "pattern": "^screenshots/[a-zA-Z0-9_-]+(?:\\.[a-zA-Z0-9]+)?$" },
@@ -54,6 +58,7 @@
         "id": { "$ref": "#/$defs/id" },
         "order": { "type": "integer", "minimum": 1 },
         "action": { "$ref": "#/$defs/text" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
         "before": { "$ref": "#/$defs/screenshot" },
         "after": { "$ref": "#/$defs/screenshot" },
         "note": { "type": "string" },
@@ -63,10 +68,12 @@
     "check": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "target", "input", "before", "after", "result"],
+      "required": ["id", "target", "input", "before", "result"],
+      "anyOf": [{ "required": ["after"] }, { "required": ["error"] }],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "target": { "$ref": "#/$defs/text" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
         "input": true,
         "before": true,
         "after": true,

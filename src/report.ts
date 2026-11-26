@@ -4,11 +4,17 @@ import schema from "./run.schema.json";
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Result = "pass" | "fail" | "info";
 export type Platform = "flutter" | "ios" | "android" | "web";
-export type GitMetadata = { branch: string | null; baseSha: string | null; headSha: string | null };
+export type GitMetadata = {
+  branch: string | null;
+  baseSha: string | null;
+  headSha: string | null;
+  dirty?: boolean;
+};
 export type Step = {
   id: string;
   order: number;
   action: string;
+  createdAt?: string;
   before?: string;
   after?: string;
   note: string;
@@ -17,13 +23,12 @@ export type Step = {
 export type Check = {
   id: string;
   target: string;
+  createdAt?: string;
   input: Json;
   before: Json;
-  after: Json;
   expected?: Json;
-  error?: string;
   result: Result;
-};
+} & ({ after: Json; error?: string } | { after?: never; error: string });
 export type Run = {
   formatVersion: 1;
   id: string;
@@ -34,7 +39,10 @@ export type Run = {
   platform: Platform;
   steps: Step[];
   checks: Check[];
-} & ({ verdict?: never; summary?: never } | { verdict: Result; summary: string });
+} & (
+  | { verdict?: never; summary?: never; endedAt?: never }
+  | { verdict: Result; summary: string; endedAt?: string }
+);
 
 export const runId = new RegExp(schema.$defs.id.pattern);
 let validate: ReturnType<Ajv["compile"]> | undefined;

@@ -41,6 +41,10 @@ function read(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function assertTimestamp(value) {
+  assert.equal(new Date(value).toISOString(), value);
+}
+
 test("CLI records evidence from a subdirectory and completes the run", (t) => {
   const cwd = repo(t);
   const base = commit(cwd, "base");
@@ -57,7 +61,7 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   const started = run(nested, "run", "start", "--title", "Login", "--platform", "flutter", "--agent", "Codex");
   const { id, path } = started;
   assert.equal(path, join(git(cwd, "rev-parse", "--show-toplevel"), ".alibai", "runs", id, "run.json"));
-  assert.deepEqual(read(path).git, { branch: "feature", baseSha: base, headSha: head });
+  assert.deepEqual(read(path).git, { branch: "feature", baseSha: base, headSha: head, dirty: true });
   assert.equal(read(path).agent, "Codex");
   assert.equal(git(cwd, "check-ignore", path), path);
   assert.deepEqual(run(nested, "step", "--action", "Tap sign in", "--before", "before image.png",
@@ -76,15 +80,19 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   assert.equal(recorded.steps[1].note, "");
   assert.equal(recorded.steps[1].result, "info");
   assert.equal(recorded.steps[1].before, undefined);
+  assertTimestamp(recorded.steps[0].createdAt);
   assert.deepEqual(readFileSync(join(dirname(path), recorded.steps[0].before)), before);
   assert.deepEqual(readFileSync(join(dirname(path), recorded.steps[0].after)), after);
   assert.notEqual(recorded.steps[0].after, recorded.steps[1].after);
-  assert.deepEqual(recorded.checks[0], {
-    id: recorded.checks[0].id, target: "parseAge", input: { age: "1" },
+  const { createdAt: checkedAt, ...check } = recorded.checks[0];
+  assertTimestamp(checkedAt);
+  assert.deepEqual(check, {
+    id: check.id, target: "parseAge", input: { age: "1" },
     before: -1, after: 1, expected: 1, error: "RangeError", result: "fail",
   });
   assert.equal(recorded.verdict, "pass");
   assert.equal(recorded.summary, "Login verified.");
+  assertTimestamp(recorded.endedAt);
   assert.deepEqual(run(cwd, "list"), {
     runs: [{ id, path, title: "Login", createdAt: recorded.createdAt, platform: "flutter", verdict: "pass" }],
   });
@@ -94,21 +102,34 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
 test("CLI handles an unborn branch, detached HEAD, and explicit run or base", (t) => {
   const cwd = repo(t);
   const first = run(cwd, "run", "start", "--title", "Unborn");
-  assert.deepEqual(read(first.path).git, { branch: "main", baseSha: null, headSha: null });
+  assert.deepEqual(read(first.path).git, { branch: "main", baseSha: null, headSha: null, dirty: false });
   assert.equal(read(first.path).platform, "web");
   assert.equal(read(first.path).agent, undefined);
 
   const head = commit(cwd, "only commit");
   git(cwd, "checkout", "--quiet", "--detach");
   const second = run(cwd, "run", "start", "--title", "Detached");
-  assert.deepEqual(read(second.path).git, { branch: null, baseSha: null, headSha: head });
+  assert.deepEqual(read(second.path).git, { branch: null, baseSha: null, headSha: head, dirty: false });
   const third = run(cwd, "run", "start", "--title", "Explicit base", "--base", "main");
-  assert.deepEqual(read(third.path).git, { branch: null, baseSha: head, headSha: head });
+  assert.deepEqual(read(third.path).git, { branch: null, baseSha: head, headSha: head, dirty: false });
   assert.deepEqual(run(cwd, "list").runs.map((entry) => entry.id), [third.id, second.id, first.id]);
   run(cwd, "run", "end", "--run", first.id, "--verdict", "info");
   assert.equal(read(first.path).summary, "Verdict recorded as info.");
   assert.equal(read(second.path).verdict, undefined);
   fail(cwd, ["run", "start", "--title", "Bad base", "--base", "missing"], /does not resolve/);
+});
+
+test("check records exceptions without after and preserves explicit JSON null", (t) => {
+  const cwd = repo(t);
+  const { path } = run(cwd, "run", "start", "--title", "Exceptions");
+  const args = ["check", "--target", "parse", "--input", "null", "--before", "false"];
+  fail(cwd, args, /--after requires/);
+  run(cwd, ...args, "--error", "TypeError");
+  run(cwd, ...args, "--after", "null");
+  const [exception, ordinary] = read(path).checks;
+  assert.equal(exception.error, "TypeError");
+  assert.equal(Object.hasOwn(exception, "after"), false);
+  assert.equal(ordinary.after, null);
 });
 
 test("bad flags and copy or write failures leave the existing record intact", (t) => {

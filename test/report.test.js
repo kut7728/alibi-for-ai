@@ -18,18 +18,29 @@ test("v1 accepts optional evidence and arbitrary JSON, and rejects invalid recor
     summary: "Verified.",
   };
   assert.doesNotThrow(() => assertRun(run, "test"));
+  assert.doesNotThrow(() => assertRun({
+    ...run,
+    endedAt: run.createdAt,
+    git: { ...run.git, dirty: false },
+    steps: [{ ...run.steps[0], createdAt: run.createdAt }],
+    checks: [{ ...run.checks[0], createdAt: run.createdAt, after: undefined, error: "TypeError" }],
+  }, "test"));
   const [step] = run.steps;
   for (const invalid of [
     { ...run, formatVersion: 2 },
     { ...run, createdAt: "yesterday" },
     { ...run, createdAt: "2026-02-31T00:00:00.000Z" },
     { ...run, git: { ...run.git, headSha: "short" } },
+    { ...run, git: { ...run.git, dirty: "false" } },
     { ...run, verdict: undefined },
+    { ...run, endedAt: "yesterday" },
     { ...run, summary: "two\nlines" },
     { ...run, summary: "trailing newline\n" },
     { ...run, steps: [{ ...step, after: undefined }] },
     { ...run, steps: [{ ...step, after: "../outside.png" }] },
+    { ...run, steps: [{ ...step, createdAt: "yesterday" }] },
     { ...run, checks: [{ ...run.checks[0], before: undefined }] },
+    { ...run, checks: [{ ...run.checks[0], after: undefined }] },
   ]) {
     assert.throws(() => assertRun(invalid, "test"), /invalid run format/);
   }
