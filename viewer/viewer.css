@@ -220,6 +220,10 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .meta .branch { max-width: min(34ch, 57vw); }
 .meta dt { color: var(--al-muted); }
 .meta code { font-size: var(--al-text-xs); }
+.meta .git-changes { flex-basis: 100%; }
+.git-changes summary { cursor: pointer; font-weight: 600; }
+.git-changes ul { margin: 4px 0; padding-inline-start: 20px; }
+.git-changes li code { white-space: pre-wrap; }
 .counts { gap: 22px; margin-top: 16px; }
 .count { display: grid; gap: 4px; }
 .count b { font: 600 var(--al-text-2xl)/1 var(--al-font-mono); }

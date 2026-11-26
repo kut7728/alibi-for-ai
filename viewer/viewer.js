@@ -233,6 +233,27 @@ function timeline({ steps, checks }) {
   return exhibits;
 }
 
+function appendGitChanges(meta, git) {
+  for (const [label, changes] of [["started", git.startChanges], ["ended", git.endChanges]]) {
+    if (changes === undefined) continue;
+    const value = el("dd", "");
+    if (changes === null) {
+      value.append(t("gitChangesUnavailable"));
+    } else {
+      const { paths, diffSha256 } = changes;
+      const files = t(paths.length === 1 ? "changedFile" : "changedFiles", { count: formats.count.format(paths.length) });
+      const summary = el("summary", "", t("gitChanges", {
+        files, hash: diffSha256?.slice(0, 12) ?? t("hashUnavailable"),
+      }));
+      if (diffSha256) summary.title = diffSha256;
+      const list = el("ul", "");
+      for (const path of paths) list.append(el("li", "", el("code", "", path)));
+      value.append(el("details", "", summary, list));
+    }
+    meta.append(el("div", "git-changes", el("dt", "", t(label)), value));
+  }
+}
+
 function showCase(run) {
   const title = heading(run.title);
   const exhibits = timeline(run);
@@ -262,6 +283,7 @@ function showCase(run) {
   ]) {
     meta.append(el("div", "", el("dt", "", t(label)), el("dd", "", value)));
   }
+  appendGitChanges(meta, run.git);
   const stamp = result === "info" ? badge(result, verdicts[result]) : el("span", `stamp ${result}`, t(verdicts[result]));
   if (result === "pass" || result === "fail") stamp.lang = "en";
   const verdict = el("div", "verdict", stamp);

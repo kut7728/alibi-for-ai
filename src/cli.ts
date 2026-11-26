@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { extname } from "node:path";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
-import { gitMetadata, gitRoot } from "./git";
+import { gitChanges, gitMetadata, gitRoot } from "./git";
 import { parseJson, type Platform, type Result, type Step } from "./report";
 import { RunStore, type InvalidRun } from "./store";
 import { openViewer } from "./viewer";
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
         title,
         createdAt: new Date().toISOString(),
         platform,
-        git: gitMetadata(base),
+        git: gitMetadata(root, base),
         agent,
         steps: [],
         checks: [],
@@ -173,6 +173,7 @@ async function main(): Promise<void> {
         run.verdict = verdict;
         run.summary = summary.trim();
         run.endedAt = new Date().toISOString();
+        run.git.endChanges = gitChanges(root).changes;
       }));
       break;
     }
