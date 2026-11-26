@@ -142,6 +142,9 @@ async function main(): Promise<void> {
       const before = parseJson(textFlag(flags.before, "before"), "--before");
       const expected = flags.expected === undefined ? undefined : parseJson(flags.expected, "--expected");
       const error = flags.error === undefined ? undefined : textFlag(flags.error, "error");
+      if (flags.after === undefined && error === undefined) {
+        throw new Error("Provide --after with a JSON value or --error for an exception.");
+      }
       const outcome = flags.after === undefined && error !== undefined
         ? { error }
         : { after: parseJson(textFlag(flags.after, "after"), "--after"), error };

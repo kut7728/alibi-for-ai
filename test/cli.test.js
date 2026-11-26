@@ -125,7 +125,7 @@ test("check records exceptions without after and preserves explicit JSON null", 
   const cwd = repo(t);
   const { path } = run(cwd, "run", "start", "--title", "Exceptions");
   const args = ["check", "--target", "parse", "--input", "null", "--before", "false"];
-  fail(cwd, args, /--after requires/);
+  fail(cwd, args, /Provide --after with a JSON value or --error for an exception/);
   run(cwd, ...args, "--error", "TypeError");
   run(cwd, ...args, "--after", "null");
   const [exception, ordinary] = read(path).checks;
