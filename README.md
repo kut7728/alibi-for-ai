@@ -15,6 +15,26 @@ npm pack --pack-destination "$pack_dir"
 npm install --global "$pack_dir/alibai-0.1.0.tgz"
 ```
 
+## 에이전트 스킬 설치
+
+CLI를 로컬에 설치한 뒤 [공용 스킬](skills/alibai/SKILL.md)을 연결합니다. 연결 후 에이전트에 `alibai로 테스트해줘`라고 요청할 수 있습니다.
+
+### Claude Code
+
+이 저장소의 `skills/alibai` 디렉터리를 `~/.claude/skills/` 또는 테스트 대상 프로젝트의 `.claude/skills/`에 복사합니다. Claude Code에서 `/alibai`로도 실행할 수 있습니다. [Claude Code 스킬 문서](https://code.claude.com/docs/en/skills)
+
+### Codex
+
+`skills/alibai` 디렉터리를 테스트 대상 프로젝트의 `.agents/skills/` 또는 사용자용 `~/.agents/skills/`에 복사합니다. [Codex 스킬 문서](https://learn.chatgpt.com/docs/build-skills)
+
+스킬 자동 검색을 사용할 수 없는 환경에서는 프로젝트의 `AGENTS.md`에 Alibai 테스트 요청 시 이 저장소의 `skills/alibai/SKILL.md`를 읽고 따르라는 지침을 추가하고, 파일의 실제 절대 경로를 적습니다.
+
+### Cursor
+
+`skills/alibai` 디렉터리를 테스트 대상 프로젝트의 `.cursor/skills/` 또는 `.agents/skills/`에 복사합니다. 사용자용 경로는 `~/.cursor/skills/` 또는 `~/.agents/skills/`입니다. [Cursor 스킬 문서](https://cursor.com/docs/skills)
+
+스킬 자동 검색을 사용할 수 없는 환경에서는 `.cursor/rules/alibai.mdc`에 **Apply Intelligently** 규칙을 만듭니다. 설명에는 Alibai 테스트 요청 시 적용한다고 적고, 본문에는 공용 스킬의 실제 절대 경로를 읽고 따르라고 적습니다. [Cursor 규칙 문서](https://cursor.com/docs/rules)
+
 ## 기록하기
 
 테스트 대상 Git 작업 트리에서 실행합니다. `before.png`와 `after.png`는 미리 캡처한 스크린샷 경로로 바꿉니다. 파일 경로는 명령을 실행한 디렉터리 기준입니다.
