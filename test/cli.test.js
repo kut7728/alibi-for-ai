@@ -172,6 +172,32 @@ test("discovery reports invalid runs and keeps implicit recording usable", (t) =
   assert.match(human.stderr, /Skipping invalid run/);
 });
 
+test("JSON mutations warn when implicit selection skips a newer damaged run", (t) => {
+  const cwd = repo(t);
+  const older = run(cwd, "run", "start", "--title", "Older");
+  const newer = run(cwd, "run", "start", "--title", "Newer");
+  writeFileSync(newer.path, "not JSON");
+  writeFileSync(join(cwd, "after.png"), "test image");
+  const stepArgs = ["step", "--action", "Tap", "--after", "after.png"];
+  const checkArgs = ["check", "--target", "parse", "--input", "null", "--before", "null", "--after", "true"];
+  const invoke = (args) => spawnSync(process.execPath, [cli, "--json", ...args], { cwd, encoding: "utf8" });
+
+  const explicit = invoke([...checkArgs, "--run", older.id]);
+  assert.equal(explicit.status, 0);
+  assert.deepEqual(JSON.parse(explicit.stdout), older);
+  assert.equal(explicit.stderr, "");
+
+  for (const args of [stepArgs, checkArgs, ["run", "end", "--verdict", "pass"]]) {
+    const implicit = invoke(args);
+    assert.equal(implicit.status, 0);
+    assert.deepEqual(JSON.parse(implicit.stdout), older);
+    assert.match(implicit.stderr, /Skipping invalid run/);
+    assert.ok(implicit.stderr.includes(newer.path));
+  }
+  assert.equal(read(older.path).verdict, "pass");
+  assert.equal(readFileSync(newer.path, "utf8"), "not JSON");
+});
+
 test("a timed-out writer leaves the lock untouched and reports manual recovery", (t) => {
   const cwd = repo(t);
   const { path } = run(cwd, "run", "start", "--title", "Locked");

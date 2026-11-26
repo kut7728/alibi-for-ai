@@ -41,7 +41,7 @@ alibai check --target parseAge --input '"invalid"' --before null --error TypeErr
 - `step`과 `check`의 `--result`, `run end`의 `--verdict`에는 `pass`, `fail`, `info`를 사용합니다. 항목의 결과는 기본 `info`이며, 실행을 종료할 때는 판정을 지정합니다. `--summary`를 생략하면 판정을 담은 한 줄이 자동으로 기록됩니다.
 - `step`, `check`, `run end`는 가장 최근에 시작한 열린 실행에 기록합니다. 특정 실행을 지정하려면 `--run <id>`를 사용합니다. 종료한 실행에는 항목을 추가할 수 없습니다.
 
-기록 명령은 실행 ID와 `run.json`의 절대 경로를 출력합니다. `--json`을 쓰면 기록 명령은 `{"id":"…","path":"…"}`를, `list`는 `{"runs":[…],"invalidRuns":[…]}`를 stdout에 출력합니다. `runs`는 최신순이며 열린 실행의 `verdict`는 `null`입니다. `invalidRuns`에는 읽거나 검증할 수 없는 실행의 `{"id":"…","path":"…","error":"…"}` 항목이 담깁니다. 사람이 읽는 출력에서는 해당 경고를 stderr로 보냅니다. 기본 실행 선택은 유효한 기록에서 계속 진행합니다. CLI 오류는 종료 코드 1과 함께 stderr에 `{"error":"…"}`로 출력됩니다. `fail` 결과나 판정도 기록에 성공하면 종료 코드는 0입니다.
+기록 명령은 실행 ID와 `run.json`의 절대 경로를 출력합니다. `--json`을 쓰면 기록 명령은 `{"id":"…","path":"…"}`를, `list`는 `{"runs":[…],"invalidRuns":[…]}`를 stdout에 출력합니다. `runs`는 최신순이며 열린 실행의 `verdict`는 `null`입니다. `invalidRuns`에는 읽거나 검증할 수 없는 실행의 `{"id":"…","path":"…","error":"…"}` 항목이 담깁니다. 일반 `list` 출력과 기본 실행을 선택하는 기록 명령은 읽을 수 없는 실행을 건너뛰고 stderr에 경고를 출력합니다. 이 경고는 기록 명령에 `--json`을 붙여도 표시됩니다. `--run <id>`를 지정하면 해당 실행에 바로 접근합니다. `--json`에서 CLI 오류는 종료 코드 1과 함께 stderr에 `{"error":"…"}`로 출력됩니다. `fail` 결과나 판정도 기록에 성공하면 종료 코드는 0입니다.
 
 ## 포맷과 Git 기준
 

@@ -84,9 +84,7 @@ async function main(): Promise<void> {
     console.log(json ? JSON.stringify({ id: run.id, path }) : `${run.id}\t${path}`);
   };
   const warnInvalid = (invalidRuns: InvalidRun[]) => {
-    if (!json) {
-      for (const { path, error } of invalidRuns) console.error(`alibai: Skipping invalid run at ${path} (${error}).`);
-    }
+    for (const { path, error } of invalidRuns) console.error(`alibai: Skipping invalid run at ${path} (${error}).`);
   };
   const selectRun = async () => {
     if (flags.run !== undefined) return flags.run;
@@ -176,10 +174,12 @@ async function main(): Promise<void> {
         platform: run.platform,
         verdict: run.verdict ?? null,
       }));
-      warnInvalid(invalidRuns);
       if (json) console.log(JSON.stringify({ runs, invalidRuns }));
-      else if (runs.length === 0) console.log("No runs recorded.");
-      else for (const run of runs) console.log(`${run.id}\t${run.verdict ?? "open"}\t${run.title}\t${run.path}`);
+      else {
+        warnInvalid(invalidRuns);
+        if (runs.length === 0) console.log("No runs recorded.");
+        else for (const run of runs) console.log(`${run.id}\t${run.verdict ?? "open"}\t${run.title}\t${run.path}`);
+      }
       break;
     }
   }
