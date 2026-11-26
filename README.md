@@ -12,11 +12,8 @@
   <a href="https://github.com/kut7728/alibi-for-ai/releases"><img alt="GitHub 최신 릴리스" src="https://img.shields.io/github/v/release/kut7728/alibi-for-ai?color=F2C230&amp;labelColor=14171D"></a>
   <img alt="Node.js 22 이상 필요" src="https://img.shields.io/badge/node-%E2%89%A522-4A5161?labelColor=14171D">
   <img alt="뷰어 지원 언어 영어, 한국어, 일본어" src="https://img.shields.io/badge/viewer-EN%20%C2%B7%20%ED%95%9C%20%C2%B7%20%E6%97%A5-4A5161?labelColor=14171D">
+  <a href="LICENSE"><img alt="라이선스 MIT" src="https://img.shields.io/badge/license-MIT-4A5161?labelColor=14171D"></a>
 </p>
-
-<!-- 라이선스 결정 후 표시
-<img alt="라이선스" src="https://img.shields.io/github/license/kut7728/alibi-for-ai?labelColor=14171D">
--->
 
 <p align="center">
   <img src="docs/assets/hero.gif" alt="실패한 장바구니 테스트를 열어 UI 전후 슬라이더와 쿠폰 계산 diff를 확인하고 뷰어 언어를 바꾸는 과정" width="860">
