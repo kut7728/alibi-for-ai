@@ -13,6 +13,7 @@ const fonts = [
 ];
 const assets = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
+  ["/favicon.svg", ["favicon.svg", "image/svg+xml"]],
   ["/tokens.css", ["tokens.css", "text/css; charset=utf-8"]],
   ["/viewer.css", ["viewer.css", "text/css; charset=utf-8"]],
   ["/viewer.js", ["viewer.js", "text/javascript; charset=utf-8"]],

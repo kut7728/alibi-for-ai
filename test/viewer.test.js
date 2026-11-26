@@ -61,10 +61,18 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-security-policy"), /script-src 'self'/);
   assert.match(response.headers.get("content-security-policy"), /font-src 'self'/);
-  assert.match(await response.text(), /<main id="app"/);
+  assert.match(response.headers.get("content-security-policy"), /img-src 'self'/);
+  const html = await response.text();
+  assert.match(html, /<main id="app"/);
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
   for (const asset of ["tokens.css", "viewer.css", "viewer.js", "messages.js"]) {
     assert.equal((await fetch(url + asset)).status, 200);
   }
+  const icon = await fetch(url + "favicon.svg");
+  assert.equal(icon.status, 200);
+  assert.equal(icon.headers.get("content-type"), "image/svg+xml");
+  assert.equal(await icon.text(), await readFile(join(viewer, "favicon.svg"), "utf8"));
+  assert.equal((await fetch(url + "other.svg")).status, 404);
   const fonts = ["Sans-Regular", "Sans-SemiBold", "SansCondensed-Bold", "Mono-Regular", "Mono-SemiBold", "Mono-Bold"];
   for (const font of fonts) {
     const asset = await fetch(url + `fonts/IBMPlex${font}-Latin1.woff2`);
