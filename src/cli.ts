@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { gitMetadata, gitRoot } from "./git";
 import { parseJson, type Platform, type Result, type Step } from "./report";
-import { RunStore } from "./store";
+import { RunStore, type InvalidRun } from "./store";
 
 const flagNames = {
   "run start": ["title", "platform", "agent", "base"],
@@ -59,6 +59,19 @@ async function main(args: string[]): Promise<void> {
   const printMutation = ({ path, run }: { path: string; run: { id: string } }) => {
     console.log(json ? JSON.stringify({ id: run.id, path }) : `${run.id}\t${path}`);
   };
+  const warnInvalid = (invalidRuns: InvalidRun[]) => {
+    if (!json) {
+      for (const { path, error } of invalidRuns) console.error(`alibai: Skipping invalid run at ${path} (${error}).`);
+    }
+  };
+  const selectRun = async () => {
+    if (flags.run !== undefined) return flags.run;
+    const { runs, invalidRuns } = await store.list();
+    warnInvalid(invalidRuns);
+    const selected = runs.find(({ run }) => run.verdict === undefined);
+    if (!selected) throw new Error("No open run. Start one with alibai run start.");
+    return selected.run.id;
+  };
 
   switch (command) {
     case "run start": {
@@ -85,7 +98,7 @@ async function main(args: string[]): Promise<void> {
       if (flags.before === undefined && flags.after === undefined) {
         throw new Error("Provide at least one screenshot with --before or --after.");
       }
-      printMutation(await store.mutate(flags.run, async (run, screenshot) => {
+      printMutation(await store.mutate(await selectRun(), async (run, screenshot) => {
         const step: Step = {
           id: randomUUID(), order: run.steps.length + 1, action, createdAt: new Date().toISOString(),
           note: flags.note ?? "", result,
@@ -106,7 +119,7 @@ async function main(args: string[]): Promise<void> {
         ? { error }
         : { after: parseJson(textFlag(flags.after, "after"), "--after"), error };
       const result = choice(flags.result ?? "info", "result", results);
-      printMutation(await store.mutate(flags.run, async (run) => {
+      printMutation(await store.mutate(await selectRun(), async (run) => {
         run.checks.push({ id: randomUUID(), target, createdAt: new Date().toISOString(), input, before, expected, result, ...outcome });
       }));
       break;
@@ -117,7 +130,7 @@ async function main(args: string[]): Promise<void> {
       if (!summary.trim() || /[\r\n\u2028\u2029]/u.test(summary)) {
         throw new Error("--summary requires one non-empty line.");
       }
-      printMutation(await store.mutate(flags.run, async (run) => {
+      printMutation(await store.mutate(await selectRun(), async (run) => {
         run.verdict = verdict;
         run.summary = summary.trim();
         run.endedAt = new Date().toISOString();
@@ -125,7 +138,8 @@ async function main(args: string[]): Promise<void> {
       break;
     }
     case "list": {
-      const runs = (await store.list()).map(({ path, run }) => ({
+      const { runs: stored, invalidRuns } = await store.list();
+      const runs = stored.map(({ path, run }) => ({
         id: run.id,
         path,
         title: run.title,
@@ -133,7 +147,8 @@ async function main(args: string[]): Promise<void> {
         platform: run.platform,
         verdict: run.verdict ?? null,
       }));
-      if (json) console.log(JSON.stringify({ runs }));
+      warnInvalid(invalidRuns);
+      if (json) console.log(JSON.stringify({ runs, invalidRuns }));
       else if (runs.length === 0) console.log("No runs recorded.");
       else for (const run of runs) console.log(`${run.id}\t${run.verdict ?? "open"}\t${run.title}\t${run.path}`);
       break;

@@ -30,12 +30,13 @@ async function save(directory: string, run: Run): Promise<void> {
     await writeFile(temporary, JSON.stringify(run, null, 2) + "\n", { flag: "wx", mode: 0o600 });
     await rename(temporary, path);
   } catch (error) {
-    await rm(temporary, { force: true });
+    await rm(temporary, { force: true }).catch(() => {});
     throw error;
   }
 }
 
 type StoredRun = { path: string; run: Run };
+export type InvalidRun = { id: string; path: string; error: string };
 
 export class RunStore {
   private readonly home: string;
@@ -59,7 +60,7 @@ export class RunStore {
       await save(staging, run);
       await rename(staging, directory);
     } catch (error) {
-      await rm(staging, { recursive: true, force: true });
+      await rm(staging, { recursive: true, force: true }).catch(() => {});
       throw error;
     }
     return { path: join(directory, "run.json"), run };
@@ -74,27 +75,36 @@ export class RunStore {
     return { path, run };
   }
 
-  async list(): Promise<StoredRun[]> {
+  async list(): Promise<{ runs: StoredRun[]; invalidRuns: InvalidRun[] }> {
     try {
       await requireDirectory(this.home);
       await requireDirectory(this.runs);
     } catch (error) {
-      if (hasCode(error, "ENOENT")) return [];
+      if (hasCode(error, "ENOENT")) return { runs: [], invalidRuns: [] };
       throw error;
     }
     const entries = await readdir(this.runs, { withFileTypes: true });
-    const stored = await Promise.all(entries
+    const discovered = await Promise.all(entries
       .filter((entry) => entry.isDirectory() && runId.test(entry.name))
-      .map((entry) => this.read(join(this.runs, entry.name), entry.name)));
-    return stored.sort((a, b) => b.run.createdAt.localeCompare(a.run.createdAt) || b.run.id.localeCompare(a.run.id));
+      .map(async ({ name: id }) => {
+        const directory = join(this.runs, id);
+        try {
+          return await this.read(directory, id);
+        } catch (error) {
+          return { id, path: join(directory, "run.json"), error: (error as Error).message };
+        }
+      }));
+    const runs = discovered.filter((entry) => "run" in entry);
+    const invalidRuns = discovered.filter((entry) => "error" in entry);
+    runs.sort((a, b) => b.run.createdAt.localeCompare(a.run.createdAt) || b.run.id.localeCompare(a.run.id));
+    invalidRuns.sort((a, b) => a.id.localeCompare(b.id));
+    return { runs, invalidRuns };
   }
 
   async mutate(
-    requestedId: string | undefined,
+    id: string,
     edit: (run: Run, screenshot: (source: string, name: string) => Promise<string>) => Promise<void>,
   ): Promise<StoredRun> {
-    const id = requestedId ?? (await this.list()).find(({ run }) => run.verdict === undefined)?.run.id;
-    if (!id) throw new Error("No open run. Start one with alibai run start.");
     if (!runId.test(id)) throw new Error("--run must be a run UUID.");
 
     const directory = join(this.runs, id);
@@ -108,14 +118,20 @@ export class RunStore {
     }
     const lock = join(directory, ".lock");
     const deadline = Date.now() + 5000;
-    // shortcut: an interrupted writer can leave this lock, add crash recovery if unattended recording needs it.
+    // shortcut: recover interrupted writers manually as lock age cannot prove that a writer has exited.
     for (;;) {
       try {
         await mkdir(lock);
         break;
       } catch (error) {
         if (!hasCode(error, "EEXIST")) throw error;
-        if (Date.now() >= deadline) throw new Error(`Run ${id} is locked at ${lock}. Try again shortly.`);
+        if (Date.now() >= deadline) {
+          const quotedLock = "'" + lock.replaceAll("'", "'\\''") + "'";
+          throw new Error(
+            `Run ${id} is locked. Wait for active or pending writers to finish. ` +
+            `If all writers for this run have exited, remove the empty lock with rmdir -- ${quotedLock} and retry.`,
+          );
+        }
         await delay(25);
       }
     }
@@ -141,10 +157,10 @@ export class RunStore {
       await save(directory, stored.run);
       return stored;
     } catch (error) {
-      await Promise.all(copied.map((path) => rm(path, { force: true })));
+      await Promise.allSettled(copied.map((path) => rm(path, { force: true })));
       throw error;
     } finally {
-      await rmdir(lock);
+      await rmdir(lock).catch(() => {});
     }
   }
 }

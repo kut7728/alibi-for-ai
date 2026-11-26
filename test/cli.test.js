@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { execFile, execFileSync, spawnSync } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
 const { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { dirname, join } = require("node:path");
@@ -57,7 +58,7 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   writeFileSync(join(nested, "before image.png"), before);
   writeFileSync(join(nested, "after image.png"), after);
 
-  assert.deepEqual(run(nested, "list"), { runs: [] });
+  assert.deepEqual(run(nested, "list"), { runs: [], invalidRuns: [] });
   const started = run(nested, "run", "start", "--title", "Login", "--platform", "flutter", "--agent", "Codex");
   const { id, path } = started;
   assert.equal(path, join(git(cwd, "rev-parse", "--show-toplevel"), ".alibai", "runs", id, "run.json"));
@@ -95,6 +96,7 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   assertTimestamp(recorded.endedAt);
   assert.deepEqual(run(cwd, "list"), {
     runs: [{ id, path, title: "Login", createdAt: recorded.createdAt, platform: "flutter", verdict: "pass" }],
+    invalidRuns: [],
   });
   fail(cwd, ["run", "end", "--run", id, "--verdict", "pass"], /already completed/);
 });
@@ -132,6 +134,58 @@ test("check records exceptions without after and preserves explicit JSON null", 
   assert.equal(ordinary.after, null);
 });
 
+test("discovery reports invalid runs and keeps implicit recording usable", (t) => {
+  const cwd = repo(t);
+  const started = run(cwd, "run", "start", "--title", "Healthy");
+  const invalid = [randomUUID(), randomUUID(), randomUUID()].sort();
+  const [missing, malformed, nonFile] = invalid.map((id) => {
+    const directory = join(dirname(dirname(started.path)), id);
+    mkdirSync(directory);
+    return join(directory, "run.json");
+  });
+  writeFileSync(malformed, "not JSON");
+  mkdirSync(nonFile);
+  const listed = spawnSync(process.execPath, [cli, "list", "--json"], { cwd, encoding: "utf8" });
+  assert.equal(listed.status, 0);
+  assert.equal(listed.stderr, "");
+  const { runs, invalidRuns } = JSON.parse(listed.stdout);
+  assert.deepEqual(runs.map(({ id }) => id), [started.id]);
+  assert.deepEqual(invalidRuns.map(({ id, path }) => ({ id, path })),
+    invalid.map((id, index) => ({ id, path: [missing, malformed, nonFile][index] })));
+  assert.match(invalidRuns[0].error, /ENOENT/);
+  assert.match(invalidRuns[1].error, /invalid JSON/);
+  assert.match(invalidRuns[2].error, /Expected a regular file/);
+
+  writeFileSync(join(cwd, "after.png"), "test image");
+  const step = spawnSync(process.execPath, [cli, "step", "--action", "Tap", "--after", "after.png"], {
+    cwd, encoding: "utf8",
+  });
+  assert.equal(step.status, 0);
+  assert.match(step.stdout, new RegExp(started.id));
+  assert.match(step.stderr, /Skipping invalid run/);
+  assert.deepEqual(run(cwd, "check", "--target", "parse", "--input", "null", "--before", "false", "--after", "true"), started);
+  assert.deepEqual(run(cwd, "run", "end", "--verdict", "pass"), started);
+  assert.equal(read(started.path).verdict, "pass");
+  const human = spawnSync(process.execPath, [cli, "list"], { cwd, encoding: "utf8" });
+  assert.equal(human.status, 0);
+  assert.match(human.stdout, /Healthy/);
+  assert.match(human.stderr, /Skipping invalid run/);
+});
+
+test("a timed-out writer leaves the lock untouched and reports manual recovery", (t) => {
+  const cwd = repo(t);
+  const { path } = run(cwd, "run", "start", "--title", "Locked");
+  const lock = join(dirname(path), ".lock");
+  mkdirSync(lock);
+  const preload = join(cwd, "advance-clock.cjs");
+  writeFileSync(preload, "let now = Date.now(); Date.now = () => (now += 6000);");
+  fail(cwd, ["run", "end", "--verdict", "info"],
+    /If all writers for this run have exited, remove the empty lock with rmdir -- '/,
+    { ...process.env, NODE_OPTIONS: `--require="${preload}"` });
+  assert.deepEqual(readdirSync(lock), []);
+  assert.equal(read(path).verdict, undefined);
+});
+
 test("bad flags and copy or write failures leave the existing record intact", (t) => {
   const cwd = repo(t);
   const { path } = run(cwd, "run", "start", "--title", "Failure cases");
@@ -158,6 +212,13 @@ test("bad flags and copy or write failures leave the existing record intact", (t
   assert.deepEqual(readFileSync(path), previous);
   assert.deepEqual(readdirSync(screenshots), []);
   assert.deepEqual(readdirSync(dirname(path)).sort(), ["run.json", "screenshots"]);
+
+  writeFileSync(preload, `
+    const fs = require("node:fs/promises");
+    fs.rmdir = () => Promise.reject(new Error("simulated cleanup failure"));
+  `);
+  fail(cwd, ["step", "--action", "Tap", "--after", "absent.png"], /Screenshot was not found/,
+    { ...process.env, NODE_OPTIONS: `--require="${preload}"` });
 });
 
 test("parallel CLI writers preserve every check and keep step order consecutive", async (t) => {
