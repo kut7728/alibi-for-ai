@@ -363,11 +363,14 @@ function renderScreenshots(runId, step) {
 function renderCheck(check) {
   const display = (value) => JSON.stringify(value, null, 2);
   const columns = ["before", "after", "expected"];
-  const changed = Object.hasOwn(check, "after") && display(check.before) !== display(check.after);
+  const hasAfter = Object.hasOwn(check, "after");
+  const changed = hasAfter && display(check.before) !== display(check.after);
+  const exception = !hasAfter && check.error;
+  const exceptionLabels = { after: "threw", expected: "noExpectation" };
   const tones = { before: changed ? "removed" : "", after: check.result === "fail" ? "mismatch" : changed ? "added" : "" };
   const diff = el("dl", "diff", ...columns.map((key) => {
     const present = Object.hasOwn(check, key);
-    const absent = t(key === "after" && check.error ? "threw" : "notRecorded");
+    const absent = t((exception && exceptionLabels[key]) || "notRecorded");
     return el("div", present ? tones[key] ?? "" : "", el("dt", "label", t(key)),
       el("dd", "", present ? el("pre", "", display(check[key])) : el("span", "muted", absent)));
   }));

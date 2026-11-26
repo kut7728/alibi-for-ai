@@ -149,10 +149,13 @@ test("viewer serves only supported referenced images inside their owning run", a
 
 const chromium = process.env.ALIBAI_TEST_CHROMIUM;
 test("viewer renders case files and exhibits in Chromium", { skip: !chromium, timeout: 25000 }, async (t) => {
-  const { url, root } = await fixture(t);
+  const { url, root, run, directory } = await fixture(t);
+  run.checks.push({ ...run.checks.at(-1), id: otherId, target: "parseOptionalCoupon(code)", expected: null });
+  await writeFile(join(directory, "run.json"), JSON.stringify(run));
+  const localhostUrl = url.replace("127.0.0.1", "localhost");
   const dump = async (path, profile) => (await promisify(execFile)(chromium, [
     "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-    "--virtual-time-budget=3000", "--dump-dom", `--user-data-dir=${join(root, profile)}`, url + path,
+    "--virtual-time-budget=3000", "--dump-dom", `--user-data-dir=${join(root, profile)}`, localhostUrl + path,
   ], { timeout: 10000 })).stdout;
   const list = await dump("?lang=en", "list-profile");
   assert.match(list, /1 invalid run skipped/);
@@ -163,8 +166,9 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(detail, /type="range"/);
   assert.match(detail, /No screenshot recorded/);
   assert.match(detail, /<pre>null<\/pre>/);
-  assert.match(detail, /Not recorded/);
-  assert.match(detail, /Threw: see error/);
+  assert.match(detail, /<dt class="label">After<\/dt><dd><span class="muted">Threw: see error<\/span><\/dd>/);
+  assert.match(detail, /<dt class="label">Expected<\/dt><dd><span class="muted">No expectation set<\/span><\/dd>/);
+  assert.match(detail, /<dt class="label">Expected<\/dt><dd><pre>null<\/pre><\/dd>/);
   assert.doesNotMatch(detail, /class="undefined"/);
   assert.match(detail, /class="error neutral"/);
   assert.match(detail, /ASSERT_EQ_FAILED/);
@@ -177,9 +181,11 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(ko, /한국어" aria-pressed="true"/);
   assert.match(ko, /aria-label="Add Grid Linen to the basket의 변경 전후 비교"/);
   assert.match(ko, /증거 타임라인/);
+  assert.match(ko, /기댓값이 설정되지 않음/);
   assert.match(ja, /<html lang="ja"/);
   assert.match(ja, /日本語" aria-pressed="true"/);
   assert.match(ja, /証拠のタイムライン/);
+  assert.match(ja, /期待値が設定されていません/);
   for (const localized of [ko, ja]) {
     assert.match(localized, /lang="en">Alibi broken/);
     assert.match(localized, /ASSERT_EQ_FAILED/);
