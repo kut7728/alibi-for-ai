@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { execFile, execFileSync, spawnSync } = require("node:child_process");
 const { createHash, randomUUID } = require("node:crypto");
-const { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
+const { mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, truncateSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { dirname, join } = require("node:path");
 const { test } = require("node:test");
@@ -46,6 +46,11 @@ function assertTimestamp(value) {
   assert.equal(new Date(value).toISOString(), value);
 }
 
+function addUntrackedToHash(hash, path, bytes, kind = "f") {
+  return hash.update(`${kind}${Buffer.byteLength(path)}\n`).update(path)
+    .update(createHash("sha256").update(bytes).digest());
+}
+
 test("CLI validates the viewer language option", (t) => {
   const cwd = repo(t);
   fail(cwd, ["open", "--lang", "ja-JP"], /--lang must be one of en, ko, ja/);
@@ -71,7 +76,11 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   const started = run(nested, "run", "start", "--title", "Login", "--platform", "flutter", "--agent", "Codex");
   const { id, path } = started;
   assert.equal(path, join(git(cwd, "rev-parse", "--show-toplevel"), ".alibai", "runs", id, "run.json"));
-  const changes = { paths: ["nested/after image.png", "nested/before image.png"], diffSha256: null };
+  const paths = ["nested/after image.png", "nested/before image.png"];
+  const hash = createHash("sha256").update("0\n0\n");
+  addUntrackedToHash(hash, paths[0], after);
+  addUntrackedToHash(hash, paths[1], before);
+  const changes = { paths, diffSha256: hash.digest("hex") };
   assert.deepEqual(read(path).git, { branch: "feature", baseSha: base, headSha: head, dirty: true, startChanges: changes });
   assert.equal(read(path).agent, "Codex");
   assert.equal(git(cwd, "check-ignore", path), path);
@@ -138,11 +147,13 @@ test("dirty snapshots hash staged and worktree patches independently from a link
   writeFileSync(join(worktree, "staged.txt"), "committed");
 
   const expectedHash = (...paths) => {
-    const patch = (...args) => execFileSync("git", ["diff", "--binary", "--no-ext-diff", "--no-textconv",
+    const patch = (...args) => execFileSync("git", ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv",
       "--no-color", "--no-renames", "--no-relative", "--submodule=short", "--src-prefix=a/", "--dst-prefix=b/",
       ...args, "--", ...paths], { cwd: worktree });
     const staged = patch("--cached", head);
-    return createHash("sha256").update(`${staged.length}\n`).update(staged).update(patch()).digest("hex");
+    const unstaged = patch();
+    const hash = createHash("sha256").update(`${staged.length}\n${unstaged.length}\n`).update(staged).update(unstaged);
+    return addUntrackedToHash(hash, `nested/${untracked}`, "untracked contents").digest("hex");
   };
   const expectedStart = expectedHash("staged.txt", "tracked.bin");
   const { id, path } = run(nested, "run", "start", "--title", "Linked worktree");
@@ -165,6 +176,94 @@ test("dirty snapshots hash staged and worktree patches independently from a link
   assert.equal(end.endChanges.diffSha256, expectedEnd);
   assert.notEqual(end.endChanges.diffSha256, expectedStart);
   assert.doesNotMatch(readFileSync(path, "utf8"), /staged payload|untracked contents|private evidence|GIT binary patch/);
+});
+
+test("dirty snapshots include untracked binary bytes and paths, with a per-file limit", (t) => {
+  const cwd = repo(t);
+  writeFileSync(join(cwd, ".gitignore"), "*.ignored\n");
+  git(cwd, "add", ".gitignore");
+  commit(cwd, "initial");
+  const small = Buffer.from([0, 0xff, 1]);
+  writeFileSync(join(cwd, "new.bin"), small);
+  const { id, path } = run(cwd, "run", "start", "--title", "Untracked binary");
+  const first = read(path).git.startChanges.diffSha256;
+  assert.match(first, /^[0-9a-f]{64}$/);
+  const expected = addUntrackedToHash(createHash("sha256").update("0\n0\n"), "new.bin", small).digest("hex");
+  assert.equal(first, expected);
+
+  writeFileSync(join(cwd, "new.bin"), Buffer.from([0, 0xff, 2]));
+  run(cwd, "run", "end", "--run", id, "--verdict", "pass");
+  const last = read(path).git.endChanges;
+  assert.deepEqual(last.paths, ["new.bin"]);
+  assert.match(last.diffSha256, /^[0-9a-f]{64}$/);
+  assert.notEqual(last.diffSha256, first);
+
+  const snapshot = () => read(run(cwd, "run", "start", "--title", "Snapshot").path).git.startChanges;
+  renameSync(join(cwd, "new.bin"), join(cwd, "renamed.bin"));
+  const renamed = snapshot();
+  assert.match(renamed.diffSha256, /^[0-9a-f]{64}$/);
+  assert.notEqual(renamed.diffSha256, last.diffSha256);
+  for (const file of ["large.ignored", ".alibai/large.bin"]) {
+    const excluded = join(cwd, file);
+    writeFileSync(excluded, "");
+    truncateSync(excluded, 32 * 1024 * 1024 + 1);
+  }
+  assert.deepEqual(snapshot(), renamed);
+  truncateSync(join(cwd, "renamed.bin"), 32 * 1024 * 1024);
+  assert.match(snapshot().diffSha256, /^[0-9a-f]{64}$/);
+  truncateSync(join(cwd, "renamed.bin"), 32 * 1024 * 1024 + 1);
+  writeFileSync(join(cwd, "other.txt"), "also changed");
+  assert.deepEqual(snapshot(), { paths: ["other.txt", "renamed.bin"], diffSha256: null });
+});
+
+test("untracked symlinks hash link text without reading external targets", { skip: process.platform === "win32" }, (t) => {
+  const cwd = repo(t);
+  const external = repo(t);
+  commit(cwd, "initial");
+  const target = join(external, "outside");
+  const link = join(cwd, "link");
+  writeFileSync(target, "external");
+  truncateSync(target, 32 * 1024 * 1024 + 1);
+  symlinkSync(target, link);
+  const { path, id } = run(cwd, "run", "start", "--title", "Symlink");
+  const digest = (text) => addUntrackedToHash(createHash("sha256").update("0\n0\n"), "link", text, "l").digest("hex");
+  assert.deepEqual(read(path).git.startChanges, { paths: ["link"], diffSha256: digest(target) });
+  const replacement = `${external}/./outside`;
+  rmSync(link);
+  symlinkSync(replacement, link);
+  run(cwd, "run", "end", "--run", id, "--verdict", "pass");
+  assert.deepEqual(read(path).git.endChanges, { paths: ["link"], diffSha256: digest(replacement) });
+});
+
+test("staged and worktree patches hash consistently across Git diff settings", (t) => {
+  const cwd = repo(t);
+  const files = ["a.txt", "z-é.txt"];
+  const original = Array.from({ length: 20 }, (_, index) => index % 4 === 2 ? "" : `row ${index}`);
+  const write = (lines) => files.forEach((file) => writeFileSync(join(cwd, file), lines.join("\n") + "\n"));
+  write(original);
+  git(cwd, "add", ".");
+  commit(cwd, "initial");
+  const staged = original.with(1, "staged").with(10, "also staged");
+  write(staged);
+  git(cwd, "add", ".");
+  write(staged.with(3, "unstaged").with(16, "also unstaged"));
+  const { path, id } = run(cwd, "run", "start", "--title", "Git configuration");
+  const before = read(path).git.startChanges;
+  assert.match(before.diffSha256, /^[0-9a-f]{64}$/);
+  const preConfig = [git(cwd, "diff"), git(cwd, "diff", "--cached")];
+  writeFileSync(join(cwd, ".git", "test-diff-order"), "z-*\na.txt\n");
+  for (const [key, value] of Object.entries({
+    "diff.orderFile": ".git/test-diff-order", "diff.noprefix": "true", "diff.mnemonicPrefix": "true",
+    "color.diff": "always", "diff.context": "1", "diff.interHunkContext": "10", "diff.indentHeuristic": "false",
+    "diff.algorithm": "histogram", "diff.renames": "copies", "diff.suppressBlankEmpty": "true",
+    "core.quotePath": "false", "core.abbrev": "5", "core.bigFileThreshold": "1",
+  })) git(cwd, "config", key, value);
+  assert.notEqual(git(cwd, "diff"), preConfig[0]);
+  assert.notEqual(git(cwd, "diff", "--cached"), preConfig[1]);
+  execFileSync(process.execPath, [cli, "run", "end", "--run", id, "--verdict", "pass", "--json"], {
+    cwd, env: { ...process.env, GIT_DIFF_OPTS: "--unified=0" },
+  });
+  assert.deepEqual(read(path).git.endChanges, before);
 });
 
 test("the start and end snapshots independently handle clean and unborn states", (t) => {
@@ -190,9 +289,9 @@ test("Git read errors preserve run evidence and retain any readable paths", { sk
   t.after(() => rmSync(bin, { recursive: true, force: true }));
   writeFileSync(join(bin, "git"), [
     "#!/bin/sh",
-    'if [ "$1" = --no-optional-locks ] && [ "$2" = "$ALIBAI_FAIL_GIT_COMMAND" ]; then',
-    '  printf "partial output"; exit 1',
-    "fi",
+    "for arg do",
+    '  if [ "$arg" = "$ALIBAI_FAIL_GIT_COMMAND" ]; then printf "partial output"; exit 1; fi',
+    "done",
     'exec "$ALIBAI_REAL_GIT" "$@"',
   ].join("\n"), { mode: 0o700 });
   const invoke = (command, ...args) => JSON.parse(execFileSync(process.execPath, [cli, ...args, "--json"], {

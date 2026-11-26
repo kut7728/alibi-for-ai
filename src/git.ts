@@ -1,14 +1,21 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readlinkSync, readSync, realpathSync } from "node:fs";
+import { sep } from "node:path";
 import type { GitChanges, GitMetadata } from "./report";
 
+const readLimit = 32 * 1024 * 1024;
+
 function gitCommand(cwd: string, ...args: string[]) {
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_NO_LAZY_FETCH: "1", LC_ALL: "C" };
+  // Git gives this environment variable precedence over --unified.
+  delete env.GIT_DIFF_OPTS;
   return spawnSync("git", args, {
     cwd,
-    env: { ...process.env, GIT_NO_LAZY_FETCH: "1" },
+    env,
     stdio: ["ignore", "pipe", "pipe"],
     // shortcut: cap each Git read at 32 MiB, stream patches if larger snapshots are needed.
-    maxBuffer: 32 * 1024 * 1024,
+    maxBuffer: readLimit,
   });
 }
 
@@ -31,31 +38,86 @@ export function gitRoot(): string {
   return root;
 }
 
+function untrackedDigest(file: Buffer, rootPrefix: Buffer) {
+  const entry = lstatSync(file);
+  if (entry.isSymbolicLink()) {
+    return { kind: "l", digest: createHash("sha256").update(readlinkSync(file, { encoding: "buffer" })).digest() };
+  }
+  // Git lists paths below the root. Check that parent links haven't redirected a file outside it.
+  if (!entry.isFile()) return null;
+  const resolved = realpathSync.native(file, { encoding: "buffer" });
+  if (!resolved.subarray(0, rootPrefix.length).equals(rootPrefix)) return null;
+  const fd = openSync(resolved, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.dev !== entry.dev || stat.ino !== entry.ino || stat.size > readLimit) return null;
+    const hash = createHash("sha256");
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let total = 0;
+    for (;;) {
+      const size = readSync(fd, buffer, 0, Math.min(buffer.length, readLimit - total + 1), null);
+      if (size === 0) return { kind: "f", digest: hash.digest() };
+      total += size;
+      if (total > readLimit) return null;
+      hash.update(buffer.subarray(0, size));
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function snapshotDigest(root: string, headSha: string, untracked: Buffer[]): string | null {
+  const diff = (...revisions: string[]) => gitBytes(gitCommand(root, "--no-optional-locks",
+    "-c", "core.quotePath=true", "-c", "core.bigFileThreshold=512m", "-c", "diff.suppressBlankEmpty=false",
+    "-c", "diff.mnemonicPrefix=false", "-c", "diff.noprefix=false",
+    "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--no-relative",
+    "--submodule=short", "--src-prefix=a/", "--dst-prefix=b/", "-O/dev/null",
+    "--diff-algorithm=myers", "--unified=3", "--inter-hunk-context=0", "--indent-heuristic", ...revisions,
+    "--", ":(top,exclude,literal).alibai"));
+  const staged = diff("--cached", headSha);
+  const unstaged = diff();
+  if (!staged || !unstaged || !(staged.length || unstaged.length || untracked.length)) return null;
+
+  // Lengths distinguish the two patches and each path. File digests are always 32 bytes.
+  const hash = createHash("sha256").update(`${staged.length}\n${unstaged.length}\n`).update(staged).update(unstaged);
+  try {
+    if (untracked.length) {
+      const realRoot = realpathSync(root);
+      const rootPrefix = Buffer.from(realRoot.endsWith(sep) ? realRoot : realRoot + sep);
+      for (const path of untracked.sort(Buffer.compare)) {
+        const file = untrackedDigest(Buffer.concat([rootPrefix, path]), rootPrefix);
+        if (!file) return null;
+        hash.update(`${file.kind}${path.length}\n`).update(path).update(file.digest);
+      }
+    }
+    return hash.digest("hex");
+  } catch {
+    return null;
+  }
+}
+
 export function gitChanges(root: string, headSha = gitText(gitCommand(root, "rev-parse", "--verify", "HEAD^{commit}"))):
   { dirty?: boolean; changes?: GitChanges | null } {
   const status = gitBytes(gitCommand(root, "--no-optional-locks", "status",
-    "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"))?.toString("utf8");
-  if (status === undefined) return { changes: null };
+    "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"));
+  if (!status) return { changes: null };
   const dirty = status.length > 0;
-  const paths = [...new Set(status.split("\0").filter(Boolean).map((entry) => entry.slice(3))
-    .filter((path) => path !== ".alibai" && !path.startsWith(".alibai/")))].sort();
-  if (paths.length === 0) return { dirty };
-
-  let diffSha256: string | null = null;
-  if (headSha) {
-    const diff = (...revisions: string[]) => gitBytes(gitCommand(root, "--no-optional-locks", "diff",
-      "--binary", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--no-relative",
-      "--submodule=short", "--src-prefix=a/", "--dst-prefix=b/", ...revisions,
-      "--", ":(top,exclude,literal).alibai"));
-    const staged = diff("--cached", headSha);
-    const unstaged = diff();
-    if (staged && unstaged && (staged.length > 0 || unstaged.length > 0)) {
-      // Frame the two patches so moving the same change into the index changes the digest.
-      diffSha256 = createHash("sha256").update(`${staged.length}\n`)
-        .update(staged).update(unstaged).digest("hex");
+  const paths = new Set<string>();
+  const untracked: Buffer[] = [];
+  for (let offset = 0; offset < status.length;) {
+    const end = status.indexOf(0, offset);
+    if (end < offset + 4) return { changes: null };
+    const path = status.subarray(offset + 3, end);
+    const name = path.toString("utf8");
+    if (name !== ".alibai" && !name.startsWith(".alibai/")) {
+      paths.add(name);
+      if (status.toString("ascii", offset, offset + 2) === "??") untracked.push(path);
     }
+    offset = end + 1;
   }
-  return { dirty, changes: { paths, diffSha256 } };
+  if (paths.size === 0) return { dirty };
+  const diffSha256 = headSha ? snapshotDigest(root, headSha, untracked) : null;
+  return { dirty, changes: { paths: [...paths].sort(), diffSha256 } };
 }
 
 export function gitMetadata(root: string, base?: string): GitMetadata {
