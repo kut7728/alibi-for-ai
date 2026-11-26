@@ -15,6 +15,22 @@ npm pack --pack-destination "$pack_dir"
 npm install --global "$pack_dir/alibai-0.1.0.tgz"
 ```
 
+## 에이전트 스킬 설치
+
+CLI를 로컬에 설치한 뒤 [공용 스킬](skills/alibai/SKILL.md)을 연결합니다. 연결 후 에이전트에 `alibai로 테스트해줘`라고 요청할 수 있습니다.
+
+### Claude Code
+
+이 저장소의 `skills/alibai` 디렉터리를 `~/.claude/skills/` 또는 테스트 대상 프로젝트의 `.claude/skills/`에 복사합니다. Claude Code에서 `/alibai`로도 실행할 수 있습니다.
+
+### Codex
+
+테스트 대상 프로젝트의 `AGENTS.md`에 Alibai 테스트 요청 시 `/path/to/alibi-for-ai/skills/alibai/SKILL.md`를 읽고 따르라는 지침을 추가합니다. 경로는 이 저장소의 실제 절대 경로로 바꿉니다.
+
+### Cursor
+
+테스트 대상 프로젝트에 `.cursor/rules/alibai.mdc`를 만들고 규칙 유형을 **Apply Intelligently**로 설정합니다. 설명에 Alibai 테스트 요청 시 적용한다고 적고, 규칙 본문에 Codex와 동일한 실제 스킬 경로를 읽고 따르라는 지침을 추가합니다.
+
 ## 기록하기
 
 테스트 대상 Git 작업 트리에서 실행합니다. `before.png`와 `after.png`는 미리 캡처한 스크린샷 경로로 바꿉니다. 파일 경로는 명령을 실행한 디렉터리 기준입니다.
