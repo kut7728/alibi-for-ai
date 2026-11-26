@@ -45,7 +45,7 @@ alibai check --target parseAge --input '"invalid"' --before null --error TypeErr
 
 ## 브라우저에서 증거 보기
 
-기록이 있는 Git 작업 트리에서 `alibai open`을 실행합니다. 기본 브라우저가 열리며 터미널에 출력된 `http://127.0.0.1:…/` 주소로 직접 접속할 수도 있습니다. `alibai open --json`은 `{"url":"…"}`을 출력합니다. `Ctrl+C`로 서버를 종료합니다. 기록을 추가한 뒤에는 페이지를 새로고침하면 됩니다.
+기록이 있는 Git 작업 트리에서 `alibai open`을 실행합니다. 기본 브라우저가 열리며 터미널에 출력된 `http://127.0.0.1:…/` 주소로 직접 접속할 수도 있습니다. 뷰어는 출력된 `127.0.0.1` 주소만 허용합니다. `alibai open --json`은 `{"url":"…"}`을 출력합니다. `Ctrl+C`로 서버를 종료합니다. 기록을 추가한 뒤에는 페이지를 새로고침하면 됩니다.
 
 뷰어는 읽을 수 없는 기록을 목록에 표시합니다. 타임라인은 UI 단계의 `order`와 로직 검사의 저장 순서를 유지하면서, 각 시퀀스의 다음 항목에 시간이 모두 있으면 기록 시각을 비교합니다. 시간이 같거나 한쪽에 시각이 없으면 UI 단계를 먼저 표시합니다.
 
@@ -69,4 +69,8 @@ Git 작업 트리 루트의 `.alibai/runs/<run-id>/run.json`에 [버전 1 스키
 
 같은 실행에 쓰는 명령은 최대 5초 동안 잠금을 기다립니다. 잠금은 시간이 지나도 자동으로 해제되지 않습니다. 강제 종료 뒤 잠금이 남아 있다면 해당 실행에 쓰거나 대기 중인 프로세스가 모두 종료됐는지 먼저 확인합니다. 그다음 오류에 표시된 `rmdir -- '<절대 경로>/.lock'` 명령으로 빈 잠금 디렉터리를 제거하고 다시 시도합니다. 기록은 임시 파일을 작성한 뒤 교체하는 방식으로 저장됩니다.
 
-테스트는 `npm test`로 실행합니다. Chromium 계열 브라우저의 실행 파일 경로를 `ALIBAI_TEST_CHROMIUM`으로 지정하면 브라우저 렌더링도 검증합니다.
+테스트는 `npm test`로 실행합니다. 브라우저 렌더링 테스트는 선택 실행입니다. Chromium 계열 브라우저의 실행 파일 경로를 `ALIBAI_TEST_CHROMIUM`에 지정합니다. macOS의 Chrome에서는 다음 명령을 사용합니다.
+
+```sh
+ALIBAI_TEST_CHROMIUM='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' npm test
+```

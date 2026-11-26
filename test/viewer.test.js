@@ -34,22 +34,33 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
   const response = await fetch(url);
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-security-policy"), /script-src 'self'/);
+  assert.match(response.headers.get("content-security-policy"), /font-src 'self'/);
   assert.match(await response.text(), /<main id="app"/);
   for (const asset of ["tokens.css", "viewer.css", "viewer.js"]) {
     assert.equal((await fetch(url + asset)).status, 200);
   }
+  const fonts = ["Sans-Regular", "Sans-SemiBold", "SansCondensed-Bold", "Mono-Regular", "Mono-SemiBold", "Mono-Bold"];
+  for (const font of fonts) {
+    const asset = await fetch(url + `fonts/IBMPlex${font}-Latin1.woff2`);
+    assert.equal(asset.status, 200);
+    assert.equal(asset.headers.get("content-type"), "font/woff2");
+    assert.equal(Buffer.from(await asset.arrayBuffer()).subarray(0, 4).toString(), "wOF2");
+  }
+  assert.equal((await fetch(url + "fonts/OFL.txt")).status, 404);
   const list = await (await fetch(url + "api/runs")).json();
   assert.deepEqual(list.runs, [run]);
   assert.deepEqual(list.invalidRuns.map(({ id }) => id), [invalidId]);
   assert.match(list.invalidRuns[0].error, /invalid JSON/);
-  for (const headers of [{ Host: "example.com" }, { "Sec-Fetch-Site": "cross-site" }]) {
-    const status = await new Promise((resolve, reject) => {
+  for (const headers of [{ Host: "example.com" }, { Host: `localhost:${server.address().port}` }, { "Sec-Fetch-Site": "cross-site" }]) {
+    const { status, body } = await new Promise((resolve, reject) => {
       get(url + "api/runs", { headers }, (response) => {
-        response.resume();
-        resolve(response.statusCode);
+        let body = "";
+        response.setEncoding("utf8").on("data", (chunk) => { body += chunk; });
+        response.on("end", () => resolve({ status: response.statusCode, body }));
       }).on("error", reject);
     });
     assert.equal(status, 403);
+    if (headers.Host) assert.match(body, /127\.0\.0\.1 URL printed by alibai open/);
   }
   assert.equal((await fetch(url + "api/runs", { method: "POST" })).status, 405);
 });
@@ -105,6 +116,9 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(detail, /No screenshot recorded/);
   assert.match(detail, /<pre>null<\/pre>/);
   assert.match(detail, /Not recorded/);
+  assert.match(detail, /Threw: see error/);
+  assert.doesNotMatch(detail, /class="undefined"/);
+  assert.match(detail, /class="error neutral"/);
   assert.match(detail, /ASSERT_EQ_FAILED/);
   assert.match(detail, /Add Grid Linen.*calcTotal\(items\).*applyCoupon\(code, total\).*Open the basket drawer/s);
 });
