@@ -18,6 +18,10 @@ test("v1 accepts optional evidence and arbitrary JSON, and rejects invalid recor
     summary: "Verified.",
   };
   assert.doesNotThrow(() => assertRun(run, "test"));
+  const changes = { paths: ["new\nfile.txt"], diffSha256: "f".repeat(64) };
+  assert.doesNotThrow(() => assertRun({
+    ...run, git: { ...run.git, startChanges: changes, endChanges: null },
+  }, "test"));
   assert.doesNotThrow(() => assertRun({
     ...run,
     endedAt: run.createdAt,
@@ -32,6 +36,12 @@ test("v1 accepts optional evidence and arbitrary JSON, and rejects invalid recor
     { ...run, createdAt: "2026-02-31T00:00:00.000Z" },
     { ...run, git: { ...run.git, headSha: "short" } },
     { ...run, git: { ...run.git, dirty: "false" } },
+    ...[
+      { ...changes, diffSha256: "short" },
+      { ...changes, paths: [] },
+      { ...changes, paths: ["bad\0path"] },
+      { ...changes, diff: "patch contents" },
+    ].map((startChanges) => ({ ...run, git: { ...run.git, startChanges } })),
     { ...run, verdict: undefined },
     { ...run, endedAt: "yesterday" },
     { ...run, summary: "two\nlines" },

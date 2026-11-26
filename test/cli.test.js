@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { execFile, execFileSync, spawnSync } = require("node:child_process");
-const { randomUUID } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { dirname, join } = require("node:path");
@@ -71,7 +71,8 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   const started = run(nested, "run", "start", "--title", "Login", "--platform", "flutter", "--agent", "Codex");
   const { id, path } = started;
   assert.equal(path, join(git(cwd, "rev-parse", "--show-toplevel"), ".alibai", "runs", id, "run.json"));
-  assert.deepEqual(read(path).git, { branch: "feature", baseSha: base, headSha: head, dirty: true });
+  const changes = { paths: ["nested/after image.png", "nested/before image.png"], diffSha256: null };
+  assert.deepEqual(read(path).git, { branch: "feature", baseSha: base, headSha: head, dirty: true, startChanges: changes });
   assert.equal(read(path).agent, "Codex");
   assert.equal(git(cwd, "check-ignore", path), path);
   assert.deepEqual(run(nested, "step", "--action", "Tap sign in", "--before", "before image.png",
@@ -82,6 +83,7 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
   assert.deepEqual(run(cwd, "run", "end", "--verdict", "pass", "--summary", "Login verified."), started);
 
   const recorded = read(path);
+  assert.deepEqual(recorded.git.endChanges, changes);
   assert.equal(recorded.formatVersion, 1);
   assert.equal(recorded.platform, "flutter");
   assert.deepEqual(recorded.steps.map((step) => step.order), [1, 2]);
@@ -108,6 +110,105 @@ test("CLI records evidence from a subdirectory and completes the run", (t) => {
     invalidRuns: [],
   });
   fail(cwd, ["run", "end", "--run", id, "--verdict", "pass"], /already completed/);
+});
+
+test("dirty snapshots hash staged and worktree patches independently from a linked worktree", (t) => {
+  const cwd = repo(t);
+  mkdirSync(join(cwd, ".alibai"));
+  writeFileSync(join(cwd, ".alibai", "hidden.txt"), "old evidence");
+  writeFileSync(join(cwd, ".gitignore"), "*.ignored\n");
+  writeFileSync(join(cwd, "tracked.bin"), Buffer.from([0, 1]));
+  writeFileSync(join(cwd, "staged.txt"), "committed");
+  git(cwd, "add", ".");
+  const head = commit(cwd, "project");
+  const worktree = join(cwd, "linked");
+  git(cwd, "worktree", "add", "-b", "linked", worktree);
+  const nested = join(worktree, "nested");
+  mkdirSync(nested);
+  writeFileSync(join(cwd, "only-in-main.txt"), "not part of the linked worktree");
+
+  const untracked = process.platform === "win32" ? "untracked.txt" : "new\tline\n.jp.txt";
+  writeFileSync(join(nested, untracked), "untracked contents");
+  writeFileSync(join(nested, "local.ignored"), "ignored");
+  writeFileSync(join(worktree, ".alibai", "hidden.txt"), "private evidence");
+  writeFileSync(join(worktree, "tracked.bin"), Buffer.from([0, 2]));
+  writeFileSync(join(worktree, "staged.txt"), "staged payload");
+  git(worktree, "add", "staged.txt");
+  // The worktree cancels the index change, so a single diff against HEAD would omit staged.txt.
+  writeFileSync(join(worktree, "staged.txt"), "committed");
+
+  const expectedHash = (...paths) => {
+    const patch = (...args) => execFileSync("git", ["diff", "--binary", "--no-ext-diff", "--no-textconv",
+      "--no-color", "--no-renames", "--no-relative", "--submodule=short", "--src-prefix=a/", "--dst-prefix=b/",
+      ...args, "--", ...paths], { cwd: worktree });
+    const staged = patch("--cached", head);
+    return createHash("sha256").update(`${staged.length}\n`).update(staged).update(patch()).digest("hex");
+  };
+  const expectedStart = expectedHash("staged.txt", "tracked.bin");
+  const { id, path } = run(nested, "run", "start", "--title", "Linked worktree");
+  const start = read(path).git;
+  assert.equal(start.branch, "linked");
+  assert.equal(start.headSha, head);
+  assert.deepEqual(start.startChanges, {
+    paths: [`nested/${untracked}`, "staged.txt", "tracked.bin"], diffSha256: expectedStart,
+  });
+  assert.equal(Object.hasOwn(start, "endChanges"), false);
+
+  writeFileSync(join(worktree, "tracked.bin"), Buffer.from([0, 3]));
+  writeFileSync(join(worktree, "added.txt"), "new");
+  git(worktree, "add", "added.txt");
+  const expectedEnd = expectedHash("added.txt", "staged.txt", "tracked.bin");
+  run(nested, "run", "end", "--run", id, "--verdict", "pass");
+  const end = read(path).git;
+  assert.deepEqual(end.startChanges, start.startChanges);
+  assert.deepEqual(end.endChanges.paths, ["added.txt", `nested/${untracked}`, "staged.txt", "tracked.bin"]);
+  assert.equal(end.endChanges.diffSha256, expectedEnd);
+  assert.notEqual(end.endChanges.diffSha256, expectedStart);
+  assert.doesNotMatch(readFileSync(path, "utf8"), /staged payload|untracked contents|private evidence|GIT binary patch/);
+});
+
+test("the start and end snapshots independently handle clean and unborn states", (t) => {
+  const cwd = repo(t);
+  const { id, path } = run(cwd, "run", "start", "--title", "Clean start");
+  assert.equal(Object.hasOwn(read(path).git, "startChanges"), false);
+  writeFileSync(join(cwd, "staged.txt"), "first edit");
+  git(cwd, "add", "staged.txt");
+  const dirty = run(cwd, "run", "start", "--title", "Unborn dirty");
+  assert.deepEqual(read(dirty.path).git.startChanges, { paths: ["staged.txt"], diffSha256: null });
+  run(cwd, "run", "end", "--run", id, "--verdict", "pass");
+  assert.equal(read(path).git.dirty, false);
+  assert.deepEqual(read(path).git.endChanges, { paths: ["staged.txt"], diffSha256: null });
+  commit(cwd, "initial");
+  run(cwd, "run", "end", "--run", dirty.id, "--verdict", "pass");
+  assert.equal(Object.hasOwn(read(dirty.path).git, "endChanges"), false);
+});
+
+test("Git read errors preserve run evidence and retain any readable paths", { skip: process.platform === "win32" }, (t) => {
+  const cwd = repo(t);
+  const realGit = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
+  const bin = mkdtempSync(join(tmpdir(), "alibai-git-shim-"));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  writeFileSync(join(bin, "git"), [
+    "#!/bin/sh",
+    'if [ "$1" = --no-optional-locks ] && [ "$2" = "$ALIBAI_FAIL_GIT_COMMAND" ]; then',
+    '  printf "partial output"; exit 1',
+    "fi",
+    'exec "$ALIBAI_REAL_GIT" "$@"',
+  ].join("\n"), { mode: 0o700 });
+  const invoke = (command, ...args) => JSON.parse(execFileSync(process.execPath, [cli, ...args, "--json"], {
+    cwd, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`,
+      ALIBAI_REAL_GIT: realGit, ALIBAI_FAIL_GIT_COMMAND: command },
+  }));
+  const head = commit(cwd, "initial");
+  writeFileSync(join(cwd, "staged.txt"), "content");
+  git(cwd, "add", "staged.txt");
+  const { id, path } = invoke("diff", "run", "start", "--title", "Unavailable diff");
+  assert.deepEqual(read(path).git.startChanges, { paths: ["staged.txt"], diffSha256: null });
+  invoke("status", "run", "end", "--run", id, "--verdict", "pass");
+  assert.equal(read(path).git.endChanges, null);
+  assert.equal(read(path).verdict, "pass");
+  const missingStatus = invoke("status", "run", "start", "--title", "Unavailable status");
+  assert.deepEqual(read(missingStatus.path).git, { branch: "main", baseSha: null, headSha: head, startChanges: null });
 });
 
 test("CLI handles an unborn branch, detached HEAD, and explicit run or base", (t) => {

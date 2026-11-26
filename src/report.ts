@@ -4,11 +4,17 @@ import schema from "./run.schema.json";
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Result = "pass" | "fail" | "info";
 export type Platform = "flutter" | "ios" | "android" | "web";
+export type GitChanges = {
+  paths: string[];
+  diffSha256: string | null;
+};
 export type GitMetadata = {
   branch: string | null;
   baseSha: string | null;
   headSha: string | null;
   dirty?: boolean;
+  startChanges?: GitChanges | null;
+  endChanges?: GitChanges | null;
 };
 export type Step = {
   id: string;

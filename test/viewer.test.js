@@ -149,7 +149,7 @@ test("viewer serves only supported referenced images inside their owning run", a
 
 const chromium = process.env.ALIBAI_TEST_CHROMIUM;
 test("viewer renders case files and exhibits in Chromium", { skip: !chromium, timeout: 25000 }, async (t) => {
-  const { url, root, run, directory } = await fixture(t);
+  const { url, root, runs, run, directory } = await fixture(t);
   run.checks.push({ ...run.checks.at(-1), id: otherId, target: "parseOptionalCoupon(code)", expected: null });
   await writeFile(join(directory, "run.json"), JSON.stringify(run));
   const localhostUrl = url.replace("127.0.0.1", "localhost");
@@ -165,6 +165,7 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
   assert.match(detail, /type="range"/);
   assert.match(detail, /No screenshot recorded/);
+  assert.doesNotMatch(detail, /class="git-changes"/);
   assert.match(detail, /<pre>null<\/pre>/);
   assert.match(detail, /<dt class="label">After<\/dt><dd><span class="muted">Threw: see error<\/span><\/dd>/);
   assert.match(detail, /<dt class="label">Expected<\/dt><dd><span class="muted">No expectation set<\/span><\/dd>/);
@@ -191,4 +192,22 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
     assert.match(localized, /ASSERT_EQ_FAILED/);
     assert.match(localized, new RegExp('title="' + sample.createdAt + '"'));
   }
+  const dirty = {
+    ...sample, id: otherId, steps: [], checks: [],
+    git: {
+      ...sample.git, dirty: true,
+      startChanges: { paths: ["src/cart.js", "<img src=x onerror=alert(1)>"], diffSha256: "a".repeat(64) },
+      endChanges: { paths: ["src/cart.js"], diffSha256: null },
+    },
+  };
+  await mkdir(join(runs, dirty.id));
+  await writeFile(join(runs, dirty.id, "run.json"), JSON.stringify(dirty));
+  const changedCase = (locale) => dump(`?lang=${locale}#case/${dirty.id}`, `${locale}-dirty-profile`);
+  const [changed, changedKo, changedJa] = await Promise.all(["en", "ko", "ja"].map(changedCase));
+  assert.match(changed, /<dt>Started<\/dt><dd><details><summary title="a{64}">Uncommitted changes \(2 files, hash a{12}\)<\/summary>/);
+  assert.match(changed, /<dt>Ended<\/dt><dd><details><summary>Uncommitted changes \(1 file, hash unavailable\)<\/summary>/);
+  assert.match(changed, /<ul><li><code>src\/cart\.js<\/code><\/li><li><code>&lt;img src=x onerror=alert\(1\)&gt;<\/code><\/li><\/ul>/);
+  assert.doesNotMatch(changed, /<details open|<img\b/);
+  assert.match(changedKo, /커밋되지 않은 변경 사항 \(파일 2개, 해시 a{12}\)/);
+  assert.match(changedJa, /未コミットの変更（2 ファイル、ハッシュ a{12}）/);
 });

@@ -23,7 +23,9 @@
         "branch": { "type": ["string", "null"], "minLength": 1 },
         "baseSha": { "$ref": "#/$defs/sha" },
         "headSha": { "$ref": "#/$defs/sha" },
-        "dirty": { "type": "boolean" }
+        "dirty": { "type": "boolean" },
+        "startChanges": { "$ref": "#/$defs/gitChanges" },
+        "endChanges": { "$ref": "#/$defs/gitChanges" }
       }
     },
     "agent": { "$ref": "#/$defs/text" },
@@ -47,6 +49,18 @@
     "text": { "type": "string", "pattern": "\\S" },
     "timestamp": { "type": "string", "format": "date-time", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
     "sha": { "type": ["string", "null"], "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
+    "gitChanges": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["paths", "diffSha256"],
+      "properties": {
+        "paths": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[^\\u0000]+$" }
+        },
+        "diffSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
     "result": { "enum": ["pass", "fail", "info"] },
     "screenshot": { "type": "string", "pattern": "^screenshots/[a-zA-Z0-9_-]+(?:\\.[a-zA-Z0-9]+)?$" },
     "step": {
