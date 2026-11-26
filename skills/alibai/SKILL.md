@@ -6,43 +6,61 @@ description: Run tests and record local evidence with Alibi for AI, including UI
 ## Start the run
 
 ```sh
-alibai run start --title "Cart rounding" --platform web --base "$base_sha"
-```
-
-Run this in the Git checkout under test (head). Resolve the intended baseline to a local commit and substitute its SHA for `$base_sha`. If relying on the CLI default, omit `--base` and use `git.baseSha` from the reported `run.json` for comparisons. Keep all `alibai` commands in the head checkout. Use `--run <id>` for `step`, `check`, and `run end` if other runs may be open.
-
-```sh
+base_sha=$(git merge-base HEAD origin/main) &&
+evidence_dir=$(mktemp -d "${TMPDIR:-/tmp}/alibai.XXXXXXXX") &&
+base_worktree="$evidence_dir/base" &&
+alibai run start --title "Cart rounding" --platform web --base "$base_sha" &&
 git worktree add --detach "$base_worktree" "$base_sha"
 ```
 
-Use a fresh path outside the head checkout for `$base_worktree` to preserve current edits. Run the baseline there. If the baseline is unavailable, report the gap and record the current evidence you can verify.
+Run from the root of the checkout under test (head) and use a temporary directory outside it. For a known pre-change commit, replace the first assignment with `base_sha=$(git rev-parse --verify 'YOUR_REF^{commit}')`, substituting the actual local ref. Use that same SHA for both the run and the detached worktree. If the baseline is unavailable, report the gap and record what you can verify on head.
+
+Keep all `alibai` commands in the head checkout. Use `--run <id>` for `step`, `check`, and `run end` if other runs may be open.
 
 ## Record each UI action
 
 ```sh
-alibai step --action "Open cart" --before "base cart.png" --after "head cart.png" \
+(cd "$base_worktree" && npm ci && npm run dev)
+```
+
+Use the project's pinned tools and documented setup and start commands. The example starts an npm web app from its base worktree. Reproduce the action on base and save the screenshot to `$evidence_dir/base cart.png`. Stop base before starting head on the same device or port, or use separate devices or ports. Start head from its own checkout, replay the action from matching initial state, and save the screenshot to `$evidence_dir/head cart.png`.
+
+For Flutter, follow the project's SDK and device instructions. Use `fvm flutter pub get` and `fvm flutter run` when the project uses FVM. Use `sim-use` for device or simulator operations when available. Otherwise use a platform capture tool such as `xcrun simctl io booted screenshot "$path"` on an iOS simulator or `adb exec-out screencap -p > "$path"` on Android, with `$path` set to the desired external PNG path. For web, use the browser's screenshot tool.
+
+```sh
+alibai step --action "Open cart" \
+  --before "$evidence_dir/base cart.png" --after "$evidence_dir/head cart.png" \
   --note "The subtotal rounds to 130 cents." --result pass
 ```
 
-Replay the same action from matching initial state on base and head. Capture the corresponding screen on each as `--before` (base) and `--after` (head). Quote paths with spaces. Relative screenshot paths resolve from the directory where you run `alibai step`. Use absolute paths for captures outside that directory. If only one side is available, pass its flag and explain the gap in `--note`. Each `step` needs at least one screenshot.
-
-For Flutter device or simulator operations, use the `sim-use` skill and launch each checkout with `fvm flutter run`.
+Use distinct filenames for each action. Relative paths resolve from the directory where you run `alibai step`. If only one capture is available, pass its flag and explain the gap in `--note`. Each step needs at least one screenshot.
 
 ## Record each changed logic check
 
 ```sh
-alibai check --target roundSubtotal --input '{"cents":125}' \
-  --before 120 --after 130 --expected 130 --result pass
+input='{"cents":125}'
+probe='const { roundSubtotal } = require("./cart.cjs");
+console.log(JSON.stringify(roundSubtotal(JSON.parse(process.argv[1]))));'
+before=$(cd "$base_worktree" && node -e "$probe" "$input") &&
+after=$(node -e "$probe" "$input") &&
+alibai check --target roundSubtotal --input="$input" \
+  --before="$before" --after="$after" --expected 130 --result pass
+```
+
+Use a throwaway command or focused test with each checkout's pinned tooling. This Node example imports the actual target in each checkout and prints its JSON result for the same input. Set `--result` from the observed output and add `--expected` when you know the expected value. Keep JSON strings quoted inside shell quotes.
+
+```sh
 alibai check --target roundSubtotal --input '"invalid"' \
   --before null --expected null --error 'TypeError: cents must be a number' --result fail
 ```
 
-Exercise base and head with the same input. Use actual JSON values for `--input`, `--before`, and `--after`, and add `--expected` when you know the expected result. Preserve JSON quotes inside shell quotes for strings. Use `--before=-1` for a negative number. If head throws, pass its exception name or message with `--error` and omit `--after`. The second example records an actual JSON `null` from base. If you cannot observe a required base value, report the gap.
+Run both probes again for an exception case. The example assumes base returned JSON `null` and head threw the shown error. For a head exception, pass the observed exception with `--error` and omit `--after`. If base throws or a required value is unavailable, describe the gap in the run summary. Use `null` only for an observed JSON null.
 
 ## Finish and share the result
 
 ```sh
-alibai run end --verdict fail --summary "Cart rounding passes, but invalid input throws instead of returning null."
+alibai run end --verdict fail --summary "Cart rounding passes, but invalid input throws instead of returning null." &&
+git worktree remove "$base_worktree"
 ```
 
-For each item and the overall verdict, use `pass` when the expected behavior is verified, `fail` when observed behavior violates the expectation, and `info` for observations without a conclusive verdict. Give the requester the run ID, verdict, and one-line summary. Tell them to run `alibai open` from the head checkout to view the evidence.
+Use `pass` for verified expectations, `fail` for observed mismatches, and `info` when an observation is inconclusive. Stop the base app before removing its clean worktree. Give the requester the run ID, verdict, and one-line summary, then tell them to run `alibai open` from head to view the evidence.
