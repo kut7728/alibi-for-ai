@@ -1,18 +1,69 @@
-# Alibi for AI
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+    <img src="docs/assets/logo-light.png" alt="Alibi for AI (alibai)" width="240">
+  </picture>
+</h1>
 
-> Your AI says it's fixed. Here's the evidence.
+<p align="center"><strong>Your AI says it's fixed. Here's the evidence.</strong></p>
+<p align="center">AI 코딩 에이전트의 테스트 증거를 로컬에 기록하고 브라우저에서 확인합니다. UI 전후 스크린샷과 로직 입출력 diff를 실행별로 모아 볼 수 있습니다.</p>
 
-AI 코딩 에이전트가 수행한 테스트의 증거(UI 전후 스크린샷, 로직 입출력)를 로컬에 기록하는 도구입니다.
+<p align="center">
+  <a href="https://github.com/kut7728/alibi-for-ai/releases"><img alt="GitHub 최신 릴리스" src="https://img.shields.io/github/v/release/kut7728/alibi-for-ai?color=F2C230&amp;labelColor=14171D"></a>
+  <img alt="Node.js 22 이상 필요" src="https://img.shields.io/badge/node-%E2%89%A522-4A5161?labelColor=14171D">
+  <img alt="뷰어 지원 언어 영어, 한국어, 일본어" src="https://img.shields.io/badge/viewer-EN%20%C2%B7%20%ED%95%9C%20%C2%B7%20%E6%97%A5-4A5161?labelColor=14171D">
+</p>
 
-## 로컬 설치
+<!-- 라이선스 결정 후 표시
+<img alt="라이선스" src="https://img.shields.io/github/license/kut7728/alibi-for-ai?labelColor=14171D">
+-->
 
-Node.js 22 이상과 Git이 필요합니다. 이 저장소에서 패키지를 빌드하고 로컬 tarball을 설치합니다.
+<p align="center">
+  <img src="docs/assets/hero.gif" alt="실패한 장바구니 테스트를 열어 UI 전후 슬라이더와 쿠폰 계산 diff를 확인하고 뷰어 언어를 바꾸는 과정" width="860">
+</p>
+
+<p align="center">
+  <a href="https://kut7728.github.io/alibi-for-ai/">Live demo</a> ·
+  <a href="docs/assets/hero.mp4?raw=true">데모 영상 (MP4 다운로드)</a>
+</p>
+
+<details>
+<summary>정지 화면 보기</summary>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/still-dark.png">
+  <img src="docs/assets/still-light.png" alt="장바구니 테스트 목록과 실패한 케이스의 UI 전후 비교가 보이는 alibai 뷰어" width="860">
+</picture>
+
+</details>
+
+| 기록 명령 | 뷰어에서 확인 |
+| --- | --- |
+| `alibai step` | UI 전후 스크린샷 슬라이더 |
+| `alibai check` | 로직 수정 전·후와 기대값 비교 |
+| `alibai run end` | 실행별 판정과 요약 |
+
+## 빠른 시작
+
+Node.js 22 이상과 Git이 필요합니다. 저장소를 클론하고 패키지를 빌드해 설치합니다.
 
 ```sh
+git clone https://github.com/kut7728/alibi-for-ai.git
+cd alibi-for-ai
 npm ci
 pack_dir="$(mktemp -d)"
 npm pack --pack-destination "$pack_dir"
 npm install --global "$pack_dir/alibai-0.1.0.tgz"
+```
+
+같은 디렉터리에서 예제 장바구니 테스트를 엽니다. 예제는 가상의 데이터만 사용하며 임시 Git 작업 트리에 복사됩니다.
+
+```sh
+example_root="$(mktemp -d)"
+git init -q "$example_root"
+mkdir -p "$example_root/.alibai/runs"
+cp -R examples/cart-rounding "$example_root/.alibai/runs/8b37f2ac-7506-4585-9d86-4a0e21c44c12"
+(cd "$example_root" && alibai open)
 ```
 
 ## 에이전트 스킬 설치
@@ -71,21 +122,14 @@ alibai check --target parseAge --input '"invalid"' --before null --error TypeErr
 
 뷰어 상단의 EN / 한 / 日 버튼으로 언어를 바꿀 수 있습니다. 처음 열 때 언어를 지정하려면 `alibai open --lang ko`처럼 `en`, `ko`, `ja` 중 하나를 전달합니다. 주소의 `lang` 값, 같은 뷰어 주소에 저장된 선택, 브라우저의 언어 설정 순으로 적용하며 기본값은 영어입니다.
 
-[브라우저 데모](https://kut7728.github.io/alibi-for-ai/)에서 설치 없이 가상 상점의 장바구니 기록을 둘러볼 수 있습니다. 로컬 뷰어에서 같은 예제를 보려면 이 저장소에서 다음을 실행합니다.
-
-```sh
-example_root="$(mktemp -d)"
-git init -q "$example_root"
-mkdir -p "$example_root/.alibai/runs"
-cp -R examples/cart-rounding "$example_root/.alibai/runs/8b37f2ac-7506-4585-9d86-4a0e21c44c12"
-(cd "$example_root" && alibai open)
-```
-
 ## 포맷과 Git 기준
 
 실행을 시작한 시점의 Git 브랜치, 커밋, 작업 트리 상태를 저장합니다. `git.dirty`는 추적되지 않은 파일을 포함한 `git status --porcelain` 출력이 있을 때 `true`입니다. `--base <ref>`를 지정하면 해당 로컬 커밋을 기준으로 사용하며, 해석할 수 없는 ref는 오류로 처리합니다. 기본 기준은 현재 커밋과 다른 공통 조상을 `origin/HEAD` → `origin/main` → 로컬 `main` → `origin/master` → 로컬 `master` 순으로 찾아 사용합니다. 없으면 현재 커밋의 첫 번째 부모를 사용합니다. 기준이나 HEAD 커밋이 없으면 해당 SHA는 `null`이며, detached HEAD의 브랜치도 `null`입니다.
 
 Git 작업 트리 루트의 `.alibai/runs/<run-id>/run.json`에 [버전 1 스키마](src/run.schema.json)를 따르는 기록을 저장합니다. 스크린샷은 실행 디렉터리의 `screenshots/`에 복사되며, JSON에는 실행 디렉터리 기준 상대 경로가 들어갑니다. 처음 실행을 시작할 때 `.alibai/.gitignore`를 만들어 증거를 Git에서 제외합니다.
+
+<details>
+<summary>타임스탬프, 작업 트리 스냅샷과 잠금</summary>
 
 새 UI 단계와 로직 검사에는 UTC `createdAt`, 종료한 실행에는 UTC `endedAt`을 기록합니다. 기존 버전 1 기록은 이 시간이나 `git.dirty`가 없어도 읽을 수 있습니다.
 
@@ -98,6 +142,10 @@ Git 작업 트리 루트의 `.alibai/runs/<run-id>/run.json`에 [버전 1 스키
 Git 상태 읽기가 실패하면 해당 시점의 스냅샷을 `null`로 기록하고, 시작 시점이면 `git.dirty`를 생략합니다. 변경 경로가 없으면 스냅샷 필드를 생략합니다. 기존 버전 1 기록에도 이 필드가 없을 수 있습니다. Git 작업 트리가 아닌 곳에서는 기록 명령이 기존과 같이 오류를 반환합니다.
 
 같은 실행에 쓰는 명령은 최대 5초 동안 잠금을 기다립니다. 잠금은 시간이 지나도 자동으로 해제되지 않습니다. 강제 종료 뒤 잠금이 남아 있다면 해당 실행에 쓰거나 대기 중인 프로세스가 모두 종료됐는지 먼저 확인합니다. 그다음 오류에 표시된 `rmdir -- '<절대 경로>/.lock'` 명령으로 빈 잠금 디렉터리를 제거하고 다시 시도합니다. 기록은 임시 파일을 작성한 뒤 교체하는 방식으로 저장됩니다.
+
+</details>
+
+## 개발 및 테스트
 
 테스트는 `npm test`로 실행합니다. 브라우저 렌더링 테스트는 선택 실행입니다. Chromium 계열 브라우저의 실행 파일 경로를 `ALIBAI_TEST_CHROMIUM`에 지정합니다. macOS의 Chrome에서는 다음 명령을 사용합니다.
 
