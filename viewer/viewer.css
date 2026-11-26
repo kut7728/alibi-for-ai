@@ -36,14 +36,18 @@
 }
 
 :root {
-  --al-font-cjk: "IBM Plex Sans JP", "IBM Plex Sans KR";
-  --al-font-sans: "IBM Plex Sans", var(--al-font-cjk), "Aptos", "Segoe UI", system-ui, sans-serif;
-  --al-font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", var(--al-font-cjk), "Aptos Narrow", "Arial Narrow", system-ui, sans-serif;
-  --al-font-mono: "IBM Plex Mono", var(--al-font-cjk), ui-monospace, "SF Mono", Menlo, monospace;
+  --al-font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
+  --al-font-label: "IBM Plex Sans Condensed", "Aptos Narrow", "Arial Narrow", var(--al-font-sans);
   --al-muted: color-mix(in srgb, var(--al-ink-3) 75%, var(--al-ink));
 }
 
-:root:lang(ko) { --al-font-cjk: "IBM Plex Sans KR", "IBM Plex Sans JP"; }
+:root:lang(ko) { --al-font-cjk: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR"; }
+:root:lang(ja) { --al-font-cjk: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP"; }
+:root:is(:lang(ko), :lang(ja)) {
+  --al-font-sans: "IBM Plex Sans", var(--al-font-cjk), sans-serif;
+  --al-font-label: "IBM Plex Sans Condensed", var(--al-font-sans);
+  --al-font-mono: "IBM Plex Mono", var(--al-font-cjk), monospace;
+}
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { execFile } = require("node:child_process");
-const { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } = require("node:fs/promises");
+const { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } = require("node:fs/promises");
 const { get } = require("node:http");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
@@ -89,49 +89,6 @@ test("viewer serves v1 evidence and invalid runs over loopback", async (t) => {
     if (headers.Host) assert.match(body, /127\.0\.0\.1 URL printed by alibai open/);
   }
   assert.equal((await fetch(url + "api/runs", { method: "POST" })).status, 405);
-});
-
-test("viewer delivers only declared CJK web subsets with both weights", async (t) => {
-  const { url } = await fixture(t);
-  const response = await fetch(url + "fonts.css");
-  assert.equal(response.status, 200);
-  const css = await response.text();
-  const faces = [...css.matchAll(/url\("\/fonts\/([^"]+)"\) format\("woff2"\);\s*font-weight: (400|600);\s*font-display: swap;\s*unicode-range: ([^;]+);/g)];
-  const files = (await readdir(join(viewer, "fonts"))).filter((file) => /^IBMPlexSans(KR|JP)-/.test(file));
-  assert.deepEqual(faces.map((face) => face[1]).sort(), files.sort());
-  for (const locale of ["KR", "JP"]) {
-    const ranges = [400, 600].map((weight) => {
-      const selected = faces.filter(([, file, cssWeight]) => file.startsWith("IBMPlexSans" + locale) && Number(cssWeight) === weight);
-      assert.ok(selected.length > 0);
-      const glyphs = new Set();
-      for (const [, file, , range] of selected) {
-        assert.match(file, weight === 400 ? /-Regular-/ : /-SemiBold-/);
-        for (const item of range.split(", ")) {
-          assert.match(item, /^U\+[0-9A-F]+(?:-[0-9A-F]+)?$/);
-          const [start, end = start] = item.slice(2).split("-").map((part) => parseInt(part, 16));
-          for (let code = start; code <= end; code++) glyphs.add(code);
-        }
-      }
-      return glyphs;
-    });
-    assert.deepEqual(ranges[0], ranges[1]);
-    const [glyphs] = ranges;
-    assert.ok(!glyphs.has(65));
-    const sample = locale === "KR" ? "한국어 사건 뷰어" : "日本語のビューアー事件";
-    for (const char of sample.replaceAll(" ", "")) assert.ok(glyphs.has(char.codePointAt(0)), char);
-    if (locale === "KR") {
-      for (let code = 0xac00; code <= 0xd7a3; code++) assert.ok(glyphs.has(code), code.toString(16));
-    }
-  }
-  for (const file of files) {
-    const font = await fetch(url + "fonts/" + file);
-    assert.equal(font.status, 200, file);
-    assert.equal(font.headers.get("content-type"), "font/woff2");
-    assert.equal(Buffer.from(await font.arrayBuffer()).subarray(0, 4).toString(), "wOF2");
-  }
-  for (const file of ["README.md", "IBMPlexSansJP-Bold-110.woff2", "IBMPlexSansKR-Regular-99.woff2"]) {
-    assert.equal((await fetch(url + "fonts/" + file)).status, 404, file);
-  }
 });
 
 test("viewer serves only supported referenced images inside their owning run", async (t) => {
