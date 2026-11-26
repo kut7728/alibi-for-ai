@@ -9,6 +9,7 @@
 <p align="center">AI 코딩 에이전트의 테스트 증거를 로컬에 기록하고 브라우저에서 확인합니다. UI 전후 스크린샷과 로직 입출력 diff를 실행별로 모아 볼 수 있습니다.</p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/alibai"><img alt="npm 최신 버전" src="https://img.shields.io/npm/v/alibai?color=F2C230&amp;labelColor=14171D"></a>
   <a href="https://github.com/kut7728/alibi-for-ai/releases"><img alt="GitHub 최신 릴리스" src="https://img.shields.io/github/v/release/kut7728/alibi-for-ai?color=F2C230&amp;labelColor=14171D"></a>
   <img alt="Node.js 22 이상 필요" src="https://img.shields.io/badge/node-%E2%89%A522-4A5161?labelColor=14171D">
   <img alt="뷰어 지원 언어 영어, 한국어, 일본어" src="https://img.shields.io/badge/viewer-EN%20%C2%B7%20%ED%95%9C%20%C2%B7%20%E6%97%A5-4A5161?labelColor=14171D">
@@ -42,7 +43,34 @@
 
 ## 빠른 시작
 
-Node.js 22 이상과 Git이 필요합니다. 저장소를 클론하고 패키지를 빌드해 설치합니다.
+Node.js 22 이상과 Git이 필요합니다. 테스트 대상 Git 작업 트리에서 npm으로 뷰어를 바로 엽니다.
+
+```sh
+npx alibai open
+```
+
+에이전트에서 사용하거나 `alibai` 명령을 직접 실행하려면 전역으로 설치합니다.
+
+```sh
+npm i -g alibai
+```
+
+뷰어는 Git 작업 트리 루트의 `.alibai/runs/`에서 증거를 읽습니다. [에이전트 스킬](#에이전트-스킬-설치)이나 [CLI 명령](#기록하기)으로 테스트를 기록할 수 있습니다. 다른 사람의 기록을 열려면 스크린샷을 포함한 실행 디렉터리 전체를 `.alibai/runs/`에 복사합니다.
+
+### 예제 실행
+
+이 저장소를 클론한 디렉터리에서 가상 데이터로 만든 [장바구니 예제](examples/cart-rounding)를 임시 Git 작업 트리에 복사해 엽니다.
+
+```sh
+example_root="$(mktemp -d)"
+git init -q "$example_root"
+mkdir -p "$example_root/.alibai/runs"
+cp -R examples/cart-rounding "$example_root/.alibai/runs/8b37f2ac-7506-4585-9d86-4a0e21c44c12"
+(cd "$example_root" && npx alibai open)
+```
+
+<details>
+<summary>소스에서 빌드해 설치하기</summary>
 
 ```sh
 git clone https://github.com/kut7728/alibi-for-ai.git
@@ -50,18 +78,10 @@ cd alibi-for-ai
 npm ci
 pack_dir="$(mktemp -d)"
 npm pack --pack-destination "$pack_dir"
-npm install --global "$pack_dir/alibai-0.1.0.tgz"
+npm install --global "$pack_dir"/alibai-*.tgz
 ```
 
-같은 디렉터리에서 예제 장바구니 테스트를 엽니다. 예제는 가상의 데이터만 사용하며 임시 Git 작업 트리에 복사됩니다.
-
-```sh
-example_root="$(mktemp -d)"
-git init -q "$example_root"
-mkdir -p "$example_root/.alibai/runs"
-cp -R examples/cart-rounding "$example_root/.alibai/runs/8b37f2ac-7506-4585-9d86-4a0e21c44c12"
-(cd "$example_root" && alibai open)
-```
+</details>
 
 ## 에이전트 스킬 설치
 
