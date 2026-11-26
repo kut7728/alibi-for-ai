@@ -30,8 +30,10 @@ async function buildPages(directory) {
     if (!name.endsWith(".png")) throw new Error(`Expected a PNG demo screenshot: ${name}`);
     files.set(`screenshots/${run.id}/${name.split("/")[1]}`, await readSource(`${example}/${name}`));
   }
-  files.set("index.html", files.get("index.html").toString("utf8")
-    .replace('<html lang="en">', '<html lang="en" data-runs-url="./runs.json">'));
+  const index = files.get("index.html").toString("utf8");
+  const staticIndex = index.replace('<html lang="en">', '<html lang="en" data-runs-url="./runs.json">');
+  if (staticIndex === index) throw new Error('Expected <html lang="en"> in viewer/index.html');
+  files.set("index.html", staticIndex);
   files.set("runs.json", JSON.stringify({ project: "Field Supply (demo)", runs: [run], invalidRuns: [] }, null, 2) + "\n");
 
   await rm(output, { recursive: true, force: true });
