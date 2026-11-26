@@ -109,6 +109,21 @@ main { display: grid; gap: 20px; padding-block: 28px 48px; }
   border: 1px solid var(--al-line);
   border-radius: var(--al-radius-md);
 }
+.empty-state {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 24px;
+  background: var(--al-surface);
+  border: 1px solid var(--al-line);
+  border-radius: var(--al-radius-md);
+}
+.empty-state p { color: var(--al-ink-2); }
+.empty-state pre {
+  padding: 5px 8px;
+  border-radius: var(--al-radius-sm);
+  background: var(--al-surface-2);
+}
 table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--al-text-sm); }
 th {
   text-align: left;
@@ -120,11 +135,19 @@ th:first-child { border-top-left-radius: var(--al-radius-md); }
 th:last-child { border-top-right-radius: var(--al-radius-md); }
 th, td { padding: 11px 14px; }
 tr + tr td { border-top: 1px solid var(--al-line); }
+tbody tr { cursor: pointer; }
 tbody tr:hover td, tbody tr:focus-within td { background: color-mix(in srgb, var(--al-tape) 12%, var(--al-surface)); }
 tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow: inset 3px 0 var(--al-tape); }
 .case-no, .time-cell { color: var(--al-muted); font-size: var(--al-text-xs); }
-.case-title a { display: inline-block; font-weight: 600; }
+.case-no, .time-cell, .exhibit-cell, th { white-space: nowrap; }
+.case-title a { display: inline-block; font-weight: 600; text-decoration: none; }
 .branch {
+  display: inline-block;
+  max-width: min(34ch, 19vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
   font: var(--al-text-xs)/1.4 var(--al-font-mono);
   color: var(--al-ink-2);
   background: var(--al-surface-2);
@@ -178,6 +201,7 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .meta, .counts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; }
 .meta { font-size: var(--al-text-sm); color: var(--al-ink-2); }
 .meta > div { display: flex; gap: 6px; flex-wrap: wrap; }
+.meta .branch { max-width: min(34ch, 57vw); }
 .meta dt { color: var(--al-muted); }
 .meta code { font-size: var(--al-text-xs); }
 .counts { gap: 22px; margin-top: 16px; }
@@ -185,6 +209,7 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .count b { font: 600 var(--al-text-2xl)/1 var(--al-font-mono); }
 .count.pass b, .stamp.pass { color: var(--al-pass); }
 .count.fail b, .stamp.fail { color: var(--al-fail); }
+.count.zero b { color: var(--al-ink-3); }
 .verdict { display: grid; justify-items: end; align-content: start; gap: 12px; text-align: right; }
 .verdict .note { max-width: 29ch; }
 .stamp {
@@ -218,6 +243,7 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .exhibit.fail::before { border-color: var(--al-fail); background: var(--al-fail); }
 .exhibit-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--al-line); }
 .exhibit-head h3 { flex: 1 1 220px; font-size: var(--al-text-md); font-weight: 600; }
+.exhibit-head .logic-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag {
   padding: 4px 7px;
   border-radius: 2px;
@@ -237,7 +263,8 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   border-radius: 6px;
   background: var(--al-surface-2);
 }
-.comparison { max-width: 560px; isolation: isolate; }
+.comparison-figure { position: relative; max-width: 560px; }
+.comparison { isolation: isolate; }
 .comparison:focus-within { outline: 2px solid var(--al-focus); outline-offset: 3px; }
 .shot {
   display: block;
@@ -263,9 +290,15 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   place-items: center;
   font-weight: 700;
 }
-.cap {
+.compare-captions {
   position: absolute;
-  bottom: 8px;
+  z-index: 1;
+  inset: auto 8px 8px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.cap {
   background: rgb(20 23 29 / .85);
   color: #fff;
   font: 700 10px/1 var(--al-font-label);
@@ -274,7 +307,6 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   border-radius: 3px;
   padding: 5px 6px;
 }
-.left { left: 8px; } .right { right: 8px; }
 .comparison input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: ew-resize; }
 .single { display: grid; grid-template-columns: repeat(2, minmax(0, 280px)); gap: 12px; }
 .single figure { display: grid; gap: 6px; }
@@ -293,7 +325,7 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .input { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: start; gap: 8px; }
 .input dt { padding-top: 5px; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-.input pre {
+.input pre, .input .target {
   display: inline-block;
   max-width: 100%;
   background: var(--al-surface-2);
@@ -323,6 +355,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   white-space: pre-wrap;
 }
 .error .label { color: inherit; }
+.error.neutral { background: var(--al-surface-2); color: var(--al-ink-2); }
 
 @media (max-width: 760px) {
   .appbar-inner, main { padding-inline: 16px; }
@@ -338,6 +371,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   .exhibit-head, .exhibit-body { padding: 10px 12px; }
   .exhibit-head h3 { flex-basis: 100%; order: 1; }
   .exhibit-time { margin-left: auto; }
+  .compare-captions { position: static; margin-bottom: 6px; }
+  .cap {
+    padding: 0;
+    background: none;
+    color: var(--al-muted);
+    font-size: var(--al-text-xs);
+  }
   .single { gap: 8px; }
   .search { margin: 0; width: 100%; }
   thead { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
@@ -347,8 +387,14 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   tbody td, tr + tr td { border: 0; padding: 0; }
   tbody tr:hover td, tbody tr:focus-within td { background: none; }
   tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow: none; }
+  tbody tr:hover, tbody tr:focus-within {
+    background: color-mix(in srgb, var(--al-tape) 12%, var(--al-surface));
+    box-shadow: inset 3px 0 var(--al-tape);
+  }
   .case-title { grid-column: 1 / -1; grid-row: 2; }
   .result-cell { grid-column: 2; grid-row: 1; }
+  .branch-cell { min-width: 0; }
+  .branch-cell .branch { max-width: 100%; }
   .exhibit-cell { grid-column: 2; justify-self: end; }
   .time-cell { grid-column: 1 / -1; }
 }

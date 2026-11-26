@@ -13,7 +13,7 @@ const verdicts = {
   pass: "Alibi holds",
   fail: "Alibi broken",
   info: "Informational",
-  open: "Open",
+  open: "In progress",
 };
 
 function el(tag, className, ...children) {
@@ -41,10 +41,17 @@ function link(text, href, className) {
 
 function timestamp(value, compact = false) {
   if (!value) return el("span", "muted", "Not recorded");
-  const text = value.replace("T", " ").slice(0, compact ? 16 : 23);
-  const node = el("time", "mono", `${text} UTC`);
+  const text = value.replace("T", " ").slice(0, 19);
+  const node = el("time", "mono", compact ? text : `${text} UTC`);
+  node.title = `${text} UTC`;
   node.dateTime = value;
   return node;
+}
+
+function branchChip(value) {
+  const chip = el("span", "branch", value ?? "—");
+  if (value) chip.title = value;
+  return chip;
 }
 
 function applyTheme() {
@@ -72,7 +79,7 @@ function showList() {
   table.setAttribute("role", "table");
   const header = el("tr", "");
   header.setAttribute("role", "row");
-  for (const title of ["Case", "Title", "Branch", "Exhibits", "Started (UTC)", "Verdict"]) {
+  for (const title of ["Case", "Title", "Branch", "Exhibits", "Started", "Verdict"]) {
     const cell = el("th", "", title);
     cell.scope = "col";
     cell.setAttribute("role", "columnheader");
@@ -110,20 +117,24 @@ function showList() {
       const exhibits = [...run.steps, ...run.checks];
       const marks = el("span", "ex-bar", ...exhibits.slice(0, 8).map(({ result }) => el("i", result)));
       marks.setAttribute("aria-hidden", "true");
+      const caseLink = link(run.title, `#case/${run.id}`);
       const row = el("tr", "",
         el("td", "case-no mono", run.id.slice(0, 8)),
-        el("td", "case-title", link(run.title, `#case/${run.id}`)),
-        el("td", "branch-cell", el("span", "branch", run.git.branch ?? "—")),
+        el("td", "case-title", caseLink),
+        el("td", "branch-cell", branchChip(run.git.branch)),
         el("td", "exhibit-cell", marks, el("span", "mono", String(exhibits.length))),
         el("td", "time-cell", timestamp(run.createdAt, true)),
         el("td", "result-cell", badge(result, verdicts[result])));
       row.setAttribute("role", "row");
       for (const cell of row.cells) cell.setAttribute("role", "cell");
+      row.addEventListener("click", (event) => {
+        if (!event.target.closest("a") && !window.getSelection()?.toString()) caseLink.click();
+      });
       return row;
     }));
     tableBox.hidden = matching.length === 0;
     status.hidden = matching.length > 0;
-    status.textContent = files.runs.length ? "No cases match your filters." : "No cases recorded.";
+    status.textContent = "No cases match your filters.";
   }
 
   search.addEventListener("input", () => {
@@ -140,9 +151,16 @@ function showList() {
         el("li", "", el("code", "", path), el("p", "", error)))));
     app.append(warning);
   }
-  if (files.runs.length) app.append(controls);
-  app.append(tableBox, status);
-  updateRows();
+  if (files.runs.length) {
+    app.append(controls, tableBox, status);
+    updateRows();
+  } else {
+    app.append(el("section", "empty-state",
+      el("h2", "", "No cases recorded"),
+      el("p", "", "Start a case from your Git working tree."),
+      el("pre", "", el("code", "", 'alibai run start --title "..."')),
+      link("Read the project README", "https://github.com/kut7728/alibi-for-ai#readme")));
+  }
   return title;
 }
 
@@ -175,7 +193,7 @@ function showCase(run) {
   for (const [label, number, tone] of [
     ["Passed", count("pass"), "pass"], ["Failed", count("fail"), "fail"], ["Exhibits", exhibits.length, ""],
   ]) {
-    counts.append(el("div", `count ${tone}`, el("b", "", String(number)), el("span", "label", label)));
+    counts.append(el("div", `count ${number === 0 ? "zero" : tone}`, el("b", "", String(number)), el("span", "label", label)));
   }
   const meta = el("dl", "meta");
   const sha = (value) => {
@@ -184,7 +202,7 @@ function showCase(run) {
     return code;
   };
   for (const [label, value] of [
-    ["Branch", el("span", "branch", run.git.branch ?? "—")],
+    ["Branch", branchChip(run.git.branch)],
     ["Commit", sha(run.git.headSha)],
     ["Base", sha(run.git.baseSha)],
     ["Worktree", run.git.dirty === undefined ? "Not recorded" : run.git.dirty ? "Dirty" : "Clean"],
@@ -196,9 +214,7 @@ function showCase(run) {
     meta.append(el("div", "", el("dt", "", label), el("dd", "", value)));
   }
   const verdict = el("div", "verdict",
-    result === "pass" || result === "fail"
-      ? el("span", `stamp ${result}`, verdicts[result])
-      : badge(result, verdicts[result]));
+    result === "info" ? badge(result, verdicts[result]) : el("span", `stamp ${result}`, verdicts[result]));
   if (run.summary) verdict.append(el("p", "note", run.summary));
   app.append(el("section", "summary",
     el("div", "", el("p", "label case-label", `Case ${run.id.slice(0, 8)}`), title, meta, counts), verdict));
@@ -211,10 +227,12 @@ function showCase(run) {
 
 function renderExhibit(run, { kind, item }, index) {
   const isStep = kind === "ui";
-  const title = isStep ? item.action : item.target;
+  const name = isStep ? item.action : item.target.split("(")[0].trim();
+  const title = isStep ? name : name.split(/[./\\:#›\s]+/).filter(Boolean).at(-1) ?? "Logic check";
+  const titleNode = el("h3", isStep ? "" : "logic-title", title);
   const number = index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
   const header = el("header", "exhibit-head", el("span", "tag", `Exhibit ${number}`),
-    el("span", "kind mono", isStep ? "UI step" : "Logic check"), el("h3", "", title));
+    el("span", "kind mono", isStep ? "UI step" : "Logic check"), titleNode);
   if (item.createdAt) {
     const seconds = (Date.parse(item.createdAt) - Date.parse(run.createdAt)) / 1000;
     const time = el("time", "exhibit-time mono", `${seconds >= 0 ? "+" : ""}${seconds.toFixed(3)}s`);
@@ -267,8 +285,11 @@ function renderScreenshots(runId, step) {
       };
       slider.addEventListener("input", update);
       update();
-      comparison.append(handle, el("span", "cap left", "Before"), el("span", "cap right", "After"), slider);
-      screenshots.replaceChildren(comparison);
+      const captions = el("figcaption", "compare-captions",
+        el("span", "cap", "Before"), el("span", "cap", "After"));
+      captions.setAttribute("aria-hidden", "true");
+      comparison.append(handle, slider);
+      screenshots.replaceChildren(el("figure", "comparison-figure", captions, comparison));
     } else {
       screenshots.replaceChildren(el("div", "single", ...sides.map((side) => {
         const label = side === "before" ? "Before" : "After";
@@ -293,13 +314,16 @@ function renderCheck(check) {
   const tones = { before: changed ? "removed" : "", after: check.result === "fail" ? "mismatch" : changed ? "added" : "" };
   const diff = el("dl", "diff", ...columns.map(([label, key]) => {
     const present = Object.hasOwn(check, key);
-    return el("div", present ? tones[key] : "", el("dt", "label", label),
-      el("dd", "", present ? el("pre", "", display(check[key])) : el("span", "muted", "Not recorded")));
+    const absent = key === "after" && check.error ? "Threw: see error" : "Not recorded";
+    return el("div", present ? tones[key] ?? "" : "", el("dt", "label", label),
+      el("dd", "", present ? el("pre", "", display(check[key])) : el("span", "muted", absent)));
   }));
   const input = el("dl", "input",
+    el("dt", "label", "Target"), el("dd", "", el("code", "target", check.target)),
     el("dt", "label", "Input"), el("dd", "", el("pre", "", JSON.stringify(check.input))));
   const content = el("div", "exhibit-body", input, diff);
-  if (check.error) content.append(el("p", "error", el("span", "label", "Error"), el("code", "", check.error)));
+  if (check.error) content.append(el("p", check.result === "info" ? "error neutral" : "error",
+    el("span", "label", "Error"), el("code", "", check.error)));
   return content;
 }
 
