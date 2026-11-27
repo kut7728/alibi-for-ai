@@ -219,7 +219,6 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   border-radius: var(--al-radius-md);
   padding: 24px;
 }
-.case-back { margin-bottom: 8px; }
 .case-navigation {
   grid-area: 1 / 1 / 3 / -1;
   align-self: start;
@@ -248,12 +247,15 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   color: var(--al-ink-3);
 }
 .case-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) fit-content(30%);
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px;
   margin-bottom: 10px;
 }
+.case-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.case-identity .badge { white-space: normal; }
+.case-identity .badge::before { flex: none; }
 .summary h1 { font-size: clamp(var(--al-text-xl), 3vw, var(--al-text-2xl)); }
 .summary .note { max-width: 72ch; margin-top: 8px; font-size: 1rem; line-height: 1.65; }
 .meta, .counts { display: flex; flex-wrap: wrap; }
@@ -276,7 +278,10 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .git-changes li code { white-space: pre-wrap; }
 .counts { gap: 8px 20px; margin-top: 16px; }
 .count { display: flex; align-items: baseline; gap: 6px; color: var(--al-ink-2); font-size: .875rem; }
+.case-header .counts { min-width: 0; justify-content: flex-end; gap: 4px 12px; margin-top: 0; }
+.case-header .count { min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 2px 6px; text-align: end; }
 .count b { font: 600 var(--al-text-lg)/1 var(--al-font-mono); }
+.case-header .count b { line-height: 1.35; }
 .count.pass b { color: var(--al-pass); }
 .count.fail b { color: var(--al-fail); }
 
@@ -534,5 +539,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 @media (max-width: 480px) {
   .preferences { flex-basis: 100%; }
+  .summary { padding-inline: 12px; }
+  .case-header { column-gap: 6px; }
+  .case-identity .badge { padding-inline: 6px; }
+  .case-header .counts { flex-direction: column; }
   .diff { grid-template-columns: minmax(0, 1fr); }
 }

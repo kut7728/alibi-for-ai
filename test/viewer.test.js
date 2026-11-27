@@ -54,7 +54,7 @@ async function fixture(t) {
   const runs = join(root, ".alibai", "runs");
   const directory = join(runs, sample.id);
   await cp(join(__dirname, "../examples/cart-rounding"), directory, { recursive: true });
-  const run = { ...sample, title: hostileTitle };
+  const run = { ...structuredClone(sample), title: hostileTitle };
   await writeFile(join(directory, "run.json"), JSON.stringify(run));
   await mkdir(join(runs, invalidId));
   await writeFile(join(runs, invalidId, "run.json"), "invalid JSON");
@@ -167,7 +167,12 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(list, /<img\b/);
   assert.match(list, /Alibi broken/);
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
-  assert.match(detail, /class="case-detail"><section class="summary"><a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><div class="case-header".*?<\/div><h1/s);
+  const [, caseHeader] = detail.match(/<section class="summary"><header class="case-header">(.*?)<\/header><h1/s) ?? [];
+  assert.ok(caseHeader, "Expected the header band above the case title");
+  assert.match(caseHeader, /^<a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><div class="case-identity">/s);
+  assert.match(caseHeader, /<p class="label">Case 8b37f2ac<\/p><span class="badge fail" lang="en">Alibi broken<\/span><\/div>/);
+  assert.match(caseHeader, /<div class="counts"><div class="count pass"><b>3<\/b><span>Passed<\/span><\/div><div class="count fail"><b>2<\/b><span>Failed<\/span><\/div><\/div>$/);
+  assert.match(detail, /<\/h1><p class="note">[^<]+<\/p><div class="counts"><div class="count"><b>7<\/b><span>Exhibits<\/span><\/div><\/div><dl class="meta">/);
   assert.match(detail, /<\/section><nav class="case-navigation"[^>]*><button[^>]*disabled[^>]*aria-label="Previous case".*?<\/button><button[^>]*disabled[^>]*aria-label="Next case".*?<\/button><\/nav><section class="evidence">/s);
   assert.match(detail, /<\/figure><\/div><p class="note">The basket count increases and the confirmation appears\.<\/p><button class="icon-control compare-toggle" aria-label="Open full-screen slider"[^>]*aria-haspopup="dialog"><svg/);
   assert.match(detail, /class="screenshot-pair"[^>]*><figure><figcaption class="label">Before<\/figcaption>.*?<figcaption class="label">After<\/figcaption>/s);
@@ -273,7 +278,9 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
     app.replaceChildren();
     const title = showCase(run);
     const summary = app.querySelector(".summary");
-    const back = summary.querySelector(".case-back").getBoundingClientRect();
+    const band = summary.querySelector(".case-header").getBoundingClientRect();
+    const [back, identity, counts] = [...summary.querySelector(".case-header").children]
+      .map((element) => element.getBoundingClientRect());
     const heading = title.getBoundingClientRect();
     const arrows = [...app.querySelectorAll(".case-navigation a")];
     const exhibits = app.querySelectorAll(".exhibit");
@@ -293,14 +300,18 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
     });
     parent.postMessage({
       viewport, height: innerHeight, positions, overflow: document.documentElement.scrollWidth > viewport,
-      backAboveHeading: back.bottom + 8 <= heading.top && back.left === heading.left,
+      headerFits: back.left === heading.left && back.right <= identity.left && identity.right <= counts.left &&
+        counts.right === band.right && band.bottom + 8 <= heading.top,
+      failedCount: summary.querySelector(".case-header .count:last-child b").textContent,
     }, "*");
   }
   const viewports = [[320, 740], [390, 844], [1280, 900]];
-  const results = await probeViewports(t, measure, viewports, ["ko"]);
-  assert.equal(results.length, viewports.length);
+  const locales = ["en", "ko", "ja"];
+  const results = await probeViewports(t, measure, viewports, locales);
+  assert.equal(results.length, viewports.length * locales.length);
   for (const result of results) {
-    assert.ok(result.backAboveHeading && !result.overflow, JSON.stringify(result));
+    assert.ok(result.headerFits && !result.overflow, JSON.stringify(result));
+    assert.equal(result.failedCount, "0");
     const [top, middle, last] = result.positions;
     assert.ok(top.scroll === 0 && middle.scroll > result.height && last.scroll > middle.scroll, JSON.stringify(result));
     for (const position of result.positions) {

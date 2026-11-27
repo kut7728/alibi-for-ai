@@ -279,13 +279,10 @@ function showCase(run) {
   const exhibits = timeline(run);
   const result = run.verdict ?? "open";
   const count = (result) => exhibits.filter(({ item }) => item.result === result).length;
-  const counts = el("div", "counts");
-  for (const [label, number, tone] of [
+  const [passed, failed, total] = [
     ["passed", count("pass"), "pass"], ["failed", count("fail"), "fail"], ["exhibits", exhibits.length, ""],
-  ]) {
-    counts.append(el("div", tone && number ? `count ${tone}` : "count",
-      el("b", "", formats.count.format(number)), el("span", "", t(label))));
-  }
+  ].map(([label, number, tone]) => el("div", tone && number ? `count ${tone}` : "count",
+    el("b", "", formats.count.format(number)), el("span", "", t(label))));
   const meta = el("dl", "meta");
   const sha = (value) => {
     const code = el("code", "", value?.slice(0, 12) ?? "—");
@@ -305,7 +302,7 @@ function showCase(run) {
     meta.append(el("div", "", el("dt", "", t(label)), el("dd", "", value)));
   }
   appendGitChanges(meta, run.git);
-  const caseHeader = el("div", "case-header",
+  const caseIdentity = el("div", "case-identity",
     el("p", "label", t("caseNumber", { id: run.id.slice(0, 8) })), badge(result, verdicts[result]));
   const cases = visibleRuns();
   const position = cases.indexOf(run);
@@ -323,9 +320,10 @@ function showCase(run) {
     arrow(1, "nextCase", "m9 5 7 7-7 7"));
   navigation.setAttribute("aria-label", t("caseNavigation"));
   const back = iconControl(link("", "#", "icon-control case-back"), t("back"), "M19 12H5m7-7-7 7 7 7");
-  const summary = el("section", "summary", back, caseHeader, title);
+  const caseHeader = el("header", "case-header", back, caseIdentity, el("div", "counts", passed, failed));
+  const summary = el("section", "summary", caseHeader, title);
   if (run.summary) summary.append(el("p", "note", run.summary));
-  summary.append(counts, meta);
+  summary.append(el("div", "counts", total), meta);
   const evidence = el("section", "evidence",
     el("h2", "", t("timeline")),
     exhibits.length ? el("ol", "timeline", ...exhibits.map((exhibit, index) => renderExhibit(run, exhibit, index)))
