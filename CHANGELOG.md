@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## 0.1.0 - 2026-11-27
+## [0.1.1] - 2026-11-27
+
+### Added
+
+- Explore a sample case in the public GitHub Pages demo without installing the CLI. [#9](https://github.com/kut7728/alibi-for-ai/pull/9)
+- Install the CLI from npm with `npm i -g alibai` or open the viewer with `npx alibai open`. [#11](https://github.com/kut7728/alibi-for-ai/pull/11)
+
+### Changed
+
+- Preview the viewer in the README with screenshots and a video, and use the project under the MIT license. [#10](https://github.com/kut7728/alibi-for-ai/pull/10)
+- Publish npm releases with Trusted Publishing and provenance, and run tests and validate the viewer template before deploying the Pages demo. [#12](https://github.com/kut7728/alibi-for-ai/pull/12)
+- Read the documentation in English, Korean, or Japanese, with English as the default README. [#13](https://github.com/kut7728/alibi-for-ai/pull/13)
+
+## [0.1.0] - 2026-11-27
 
 ### Added
 
@@ -22,4 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Accept loopback Host headers on the viewer port, show a browser tab icon, recognize regional language tags, and distinguish an omitted expectation from an explicit JSON `null` in exception evidence. [#6](https://github.com/kut7728/alibi-for-ai/pull/6)
 
-[Unreleased]: https://github.com/kut7728/alibi-for-ai/commits/main/
+[Unreleased]: https://github.com/kut7728/alibi-for-ai/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/kut7728/alibi-for-ai/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/kut7728/alibi-for-ai/releases/tag/v0.1.0
