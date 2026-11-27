@@ -320,7 +320,8 @@ function showCase(run) {
     arrow(1, "nextCase", "m9 5 7 7-7 7"));
   navigation.setAttribute("aria-label", t("caseNavigation"));
   const back = iconControl(link("", "#", "icon-control case-back"), t("back"), "M19 12H5m7-7-7 7 7 7");
-  const caseHeader = el("header", "case-header", back, caseIdentity, el("div", "counts", passed, failed));
+  const caseHeader = el("header", "case-header", el("div", "case-heading", back, caseIdentity),
+    el("div", "counts", passed, failed));
   const summary = el("section", "summary", caseHeader, title);
   if (run.summary) summary.append(el("p", "note", run.summary));
   summary.append(el("div", "counts", total), meta);

@@ -169,7 +169,7 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
   const [, caseHeader] = detail.match(/<section class="summary"><header class="case-header">(.*?)<\/header><h1/s) ?? [];
   assert.ok(caseHeader, "Expected the header band above the case title");
-  assert.match(caseHeader, /^<a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><div class="case-identity">/s);
+  assert.match(caseHeader, /^<div class="case-heading"><a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><div class="case-identity">/s);
   assert.match(caseHeader, /<p class="label">Case 8b37f2ac<\/p><span class="badge fail" lang="en">Alibi broken<\/span><\/div>/);
   assert.match(caseHeader, /<div class="counts"><div class="count pass"><b>3<\/b><span>Passed<\/span><\/div><div class="count fail"><b>2<\/b><span>Failed<\/span><\/div><\/div>$/);
   assert.match(detail, /<\/h1><p class="note">[^<]+<\/p><div class="counts"><div class="count"><b>7<\/b><span>Exhibits<\/span><\/div><\/div><dl class="meta">/);
@@ -271,7 +271,7 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
       target: "verifyBasket()", createdAt: new Date(index).toISOString(), input: [], before: 1, after: 2, result: "pass",
     }));
     const run = {
-      id: "middle", title: "아주 긴 사건 제목입니다 ".repeat(12), verdict: "pass", git: {},
+      id: "8b37f2ac", title: "아주 긴 사건 제목입니다 ".repeat(12), verdict: "pass", git: {},
       createdAt: checks[0].createdAt, endedAt: checks.at(-1).createdAt, steps: [], checks,
     };
     files = { runs: [{ id: "first", title: "First", git: {} }, run, { id: "last", title: "Last", git: {} }] };
@@ -279,8 +279,8 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
     const title = showCase(run);
     const summary = app.querySelector(".summary");
     const band = summary.querySelector(".case-header").getBoundingClientRect();
-    const [back, identity, counts] = [...summary.querySelector(".case-header").children]
-      .map((element) => element.getBoundingClientRect());
+    const [back, identity, counts] = [".case-back", ".case-identity", ".case-header .counts"]
+      .map((selector) => summary.querySelector(selector).getBoundingClientRect());
     const heading = title.getBoundingClientRect();
     const arrows = [...app.querySelectorAll(".case-navigation a")];
     const exhibits = app.querySelectorAll(".exhibit");
@@ -298,12 +298,25 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
         targets: [left, right].every(({ width, height }) => width >= 44 && height >= 44),
       };
     });
-    parent.postMessage({
-      viewport, height: innerHeight, positions, overflow: document.documentElement.scrollWidth > viewport,
+    const result = {
+      locale: document.documentElement.lang, viewport, height: innerHeight, positions,
+      overflow: document.documentElement.scrollWidth > viewport,
       headerFits: back.left === heading.left && back.right <= identity.left && identity.right <= counts.left &&
         counts.right === band.right && band.bottom + 8 <= heading.top,
       failedCount: summary.querySelector(".case-header .count:last-child b").textContent,
-    }, "*");
+    };
+    if (viewport === 320) {
+      document.documentElement.style.fontSize = "32px";
+      await document.fonts.ready;
+      result.enlargedCountLines = [...summary.querySelectorAll(".case-header .count b")].map((number, index) => {
+        number.textContent = formats.count.format(index === 0 ? 1234 : 5678);
+        const text = document.createRange();
+        text.selectNodeContents(number);
+        return text.getClientRects().length;
+      });
+      result.enlargedOverflow = document.documentElement.scrollWidth > viewport;
+    }
+    parent.postMessage(result, "*");
   }
   const viewports = [[320, 740], [390, 844], [1280, 900]];
   const locales = ["en", "ko", "ja"];
@@ -312,6 +325,10 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
   for (const result of results) {
     assert.ok(result.headerFits && !result.overflow, JSON.stringify(result));
     assert.equal(result.failedCount, "0");
+    if (result.viewport === 320) {
+      assert.deepEqual(result.enlargedCountLines, [1, 1], JSON.stringify(result));
+      assert.equal(result.enlargedOverflow, false, JSON.stringify(result));
+    }
     const [top, middle, last] = result.positions;
     assert.ok(top.scroll === 0 && middle.scroll > result.height && last.scroll > middle.scroll, JSON.stringify(result));
     for (const position of result.positions) {

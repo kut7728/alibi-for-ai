@@ -247,13 +247,15 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   color: var(--al-ink-3);
 }
 .case-header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) fit-content(30%);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
 }
-.case-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.case-heading { display: flex; flex: 1 1 min-content; min-width: 0; align-items: center; gap: inherit; }
+.case-back { flex: none; }
+.case-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; overflow-wrap: break-word; }
 .case-identity .badge { white-space: normal; }
 .case-identity .badge::before { flex: none; }
 .summary h1 { font-size: clamp(var(--al-text-xl), 3vw, var(--al-text-2xl)); }
@@ -277,10 +279,10 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .git-changes ul { margin: 4px 0; padding-inline-start: 20px; }
 .git-changes li code { white-space: pre-wrap; }
 .counts { gap: 8px 20px; margin-top: 16px; }
-.count { display: flex; align-items: baseline; gap: 6px; color: var(--al-ink-2); font-size: .875rem; }
-.case-header .counts { min-width: 0; justify-content: flex-end; gap: 4px 12px; margin-top: 0; }
-.case-header .count { min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 2px 6px; text-align: end; }
-.count b { font: 600 var(--al-text-lg)/1 var(--al-font-mono); }
+.count { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; color: var(--al-ink-2); font-size: .875rem; }
+.case-header .counts { max-width: 100%; justify-content: flex-end; gap: 4px 12px; margin-top: 0; margin-inline-start: auto; }
+.case-header .count { min-width: 0; justify-content: flex-end; gap: 2px 6px; text-align: end; overflow-wrap: break-word; }
+.count b { font: 600 var(--al-text-lg)/1 var(--al-font-mono); white-space: nowrap; }
 .case-header .count b { line-height: 1.35; }
 .count.pass b { color: var(--al-pass); }
 .count.fail b { color: var(--al-fail); }
@@ -541,7 +543,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   .preferences { flex-basis: 100%; }
   .summary { padding-inline: 12px; }
   .case-header { column-gap: 6px; }
-  .case-identity .badge { padding-inline: 6px; }
-  .case-header .counts { flex-direction: column; }
+  .case-identity .badge { padding-inline: 4px; }
+  .case-header .counts { flex: 1 1 25%; flex-direction: column; }
+  .case-header .count { column-gap: 4px; }
   .diff { grid-template-columns: minmax(0, 1fr); }
 }
