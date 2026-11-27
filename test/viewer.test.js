@@ -256,7 +256,7 @@ async function probeViewports(t, probe, viewports, locales) {
   return [...html.matchAll(/<output>(.*?)<\/output>/g)].map(([, result]) => JSON.parse(result));
 }
 
-test("case arrows stay in their gutters through the last exhibit", { skip: !chromium, timeout: 15000 }, async (t) => {
+test("case header fits the card and case arrows stay in their gutters", { skip: !chromium, timeout: 15000 }, async (t) => {
   async function measure() {
     if (app.hasAttribute("aria-busy")) {
       await new Promise((resolve) => {
@@ -305,9 +305,12 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
         counts.right === band.right && band.bottom + 8 <= heading.top,
       failedCount: summary.querySelector(".case-header .count:last-child b").textContent,
     };
-    if (viewport === 320) {
+    const checkBadges = result.locale === "en" && viewport <= 390;
+    if (viewport === 320 || checkBadges) {
       document.documentElement.style.fontSize = "32px";
       await document.fonts.ready;
+    }
+    if (viewport === 320) {
       result.enlargedCountLines = [...summary.querySelectorAll(".case-header .count b")].map((number, index) => {
         number.textContent = formats.count.format(index === 0 ? 1234 : 5678);
         const text = document.createRange();
@@ -315,6 +318,21 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
         return text.getClientRects().length;
       });
       result.enlargedOverflow = document.documentElement.scrollWidth > viewport;
+    }
+    if (checkBadges) {
+      result.enlargedBadges = ["info", undefined].map((verdict) => {
+        app.replaceChildren();
+        showCase({ ...run, verdict, checks: [],
+          endedAt: verdict ? run.endedAt : undefined, summary: verdict ? "No exhibits recorded." : undefined });
+        const header = app.querySelector(".case-header");
+        const badge = header.querySelector(".badge");
+        const bounds = header.getBoundingClientRect();
+        const text = document.createRange();
+        text.selectNodeContents(badge);
+        const fits = [badge.getBoundingClientRect(), ...text.getClientRects()].every((rect) =>
+          rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom);
+        return { label: badge.textContent, fits, width: document.documentElement.scrollWidth };
+      });
     }
     parent.postMessage(result, "*");
   }
@@ -328,6 +346,11 @@ test("case arrows stay in their gutters through the last exhibit", { skip: !chro
     if (result.viewport === 320) {
       assert.deepEqual(result.enlargedCountLines, [1, 1], JSON.stringify(result));
       assert.equal(result.enlargedOverflow, false, JSON.stringify(result));
+    }
+    if (result.locale === "en" && result.viewport <= 390) {
+      assert.deepEqual(result.enlargedBadges, ["Informational", "In progress"].map((label) => ({
+        label, fits: true, width: result.viewport,
+      })));
     }
     const [top, middle, last] = result.positions;
     assert.ok(top.scroll === 0 && middle.scroll > result.height && last.scroll > middle.scroll, JSON.stringify(result));
