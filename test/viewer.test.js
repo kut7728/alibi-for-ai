@@ -233,7 +233,7 @@ async function probeViewports(t, probe, viewports, locales) {
   const root = await mkdtemp(join(tmpdir(), "alibai-comparison-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const script = join(root, "measure.js");
-  await writeFile(script, `(${probe})();`);
+  await writeFile(script, `(${probe})().catch((error) => parent.postMessage({ error: String(error) }, "*"));`);
   const index = await readFile(join(viewer, "index.html"), "utf8");
   await writeFile(join(root, "probe.html"), index
     .replace("<head>", `<head><base href="${pathToFileURL(viewer + "/")}">`)
@@ -345,6 +345,9 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
     copy.scrollIntoView({ block: "center" });
     copy.focus({ preventScroll: true });
     const status = document.querySelector(".copy-status");
+    const prepare = screenshotPng;
+    const payload = new Blob([], { type: "image/png" });
+    screenshotPng = () => Promise.resolve(payload);
     const feedback = [];
     for (const rejected of [false, true]) {
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
@@ -355,7 +358,7 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
       } });
       const updated = new Promise((resolve) => {
         const observer = new MutationObserver(() => {
-          if (!status.textContent) return;
+          if (!/copied\.|Could not copy/.test(status.textContent)) return;
           observer.disconnect();
           resolve();
         });
@@ -373,6 +376,33 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
         stable: scrollY === scroll && document.activeElement === copy,
       });
     }
+    let release;
+    const hold = new Promise((resolve) => { release = resolve; });
+    const heldImage = copy.parentNode.querySelector("img");
+    screenshotPng = (image) => image === heldImage ? hold : Promise.resolve(payload);
+    const writes = [];
+    const copied = [];
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      write([item]) {
+        const order = writes.length + 1;
+        const write = item.getType("image/png").then(() => { copied.push(order); });
+        writes.push(write.catch(() => {}));
+        return write;
+      },
+    } });
+    const otherCopy = gallery.querySelectorAll(".shot-copy")[1];
+    copy.click();
+    const pending = status.textContent;
+    otherCopy.click();
+    const busy = status.textContent;
+    await Promise.all(writes.slice(1));
+    release(payload);
+    await Promise.all(writes);
+    const beforeRetry = { writes: writes.length, copied: [...copied], text: status.textContent };
+    otherCopy.click();
+    await Promise.all(writes);
+    screenshotPng = prepare;
+    const latestCopy = { pending, busy, beforeRetry, copied, text: status.textContent };
     gallery.remove();
 
     const isolated = [];
@@ -396,7 +426,7 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
       isolated.push({ survived, fallback, canCompare, focused: document.activeElement === trigger });
       pair.remove();
     }
-    parent.postMessage({ feedback, isolated }, "*");
+    parent.postMessage({ feedback, isolated, latestCopy }, "*");
   }
   const results = await probeViewports(t, measure, [[320, 740]], ["en"]);
   assert.equal(results.length, 1);
@@ -407,5 +437,11 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
     isolated: Array.from({ length: 2 }, () => ({
       survived: true, fallback: "Screenshot could not load", canCompare: false, focused: true,
     })),
+    latestCopy: {
+      pending: "Copying Before screenshot…",
+      busy: "Copy in progress. Try again shortly.",
+      beforeRetry: { writes: 1, copied: [1], text: "Before screenshot copied." },
+      copied: [1, 2], text: "After screenshot copied.",
+    },
   });
 });

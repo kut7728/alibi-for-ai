@@ -8,7 +8,7 @@ const languageButtons = languages.querySelectorAll("button");
 const copyStatus = el("p", "copy-status");
 copyStatus.setAttribute("role", "status");
 document.body.append(copyStatus);
-let copyRequest = 0;
+let copying = false;
 let copyTimeout;
 const themes = ["System", "Light", "Dark"];
 let themeIndex = Math.max(0, themes.indexOf(readPreference("alibai-theme")));
@@ -363,10 +363,27 @@ async function screenshotPng(image) {
   });
 }
 
-async function copyScreenshot(image, button, label) {
-  const request = ++copyRequest;
+function showCopyStatus(button, message, label) {
   clearTimeout(copyTimeout);
-  copyStatus.textContent = "";
+  copyStatus.textContent = t(message, { label });
+  const anchor = button.getBoundingClientRect();
+  const { width, height } = copyStatus.getBoundingClientRect();
+  const viewport = document.documentElement;
+  const gap = 8;
+  const below = anchor.bottom + gap;
+  const bottom = viewport.clientHeight - gap - height;
+  const top = below <= bottom ? below : anchor.top - gap - height;
+  copyStatus.style.top = `${Math.max(gap, Math.min(top, bottom))}px`;
+  copyStatus.style.left = `${Math.max(gap, Math.min(anchor.right, viewport.clientWidth - gap) - width)}px`;
+}
+
+async function copyScreenshot(image, button, label) {
+  if (copying) {
+    showCopyStatus(button, "screenshotCopyBusy");
+    return;
+  }
+  copying = true;
+  showCopyStatus(button, "screenshotCopyPending", label);
   let png;
   let message;
   try {
@@ -378,18 +395,11 @@ async function copyScreenshot(image, button, label) {
   } catch {
     png?.catch(() => {});
     message = "screenshotCopyFailed";
+  } finally {
+    copying = false;
   }
-  if (request !== copyRequest || !button.isConnected) return;
-  copyStatus.textContent = t(message, { label });
-  const anchor = button.getBoundingClientRect();
-  const { width, height } = copyStatus.getBoundingClientRect();
-  const viewport = document.documentElement;
-  const gap = 8;
-  const below = anchor.bottom + gap;
-  const bottom = viewport.clientHeight - gap - height;
-  const top = below <= bottom ? below : anchor.top - gap - height;
-  copyStatus.style.top = `${Math.max(gap, Math.min(top, bottom))}px`;
-  copyStatus.style.left = `${Math.max(gap, Math.min(anchor.right, viewport.clientWidth - gap) - width)}px`;
+  if (button.isConnected) showCopyStatus(button, message, label);
+  else copyStatus.textContent = "";
   copyTimeout = setTimeout(() => { copyStatus.textContent = ""; }, 4000);
 }
 
