@@ -171,8 +171,8 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.ok(caseHeader, "Expected the header band above the case title");
   assert.match(caseHeader, /^<div class="case-heading"><a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><div class="case-identity">/s);
   assert.match(caseHeader, /<p class="label">Case 8b37f2ac<\/p><span class="badge fail" lang="en">Alibi broken<\/span><\/div>/);
-  assert.match(caseHeader, /<div class="counts"><div class="count pass"><b>3<\/b><span>Passed<\/span><\/div><div class="count fail"><b>2<\/b><span>Failed<\/span><\/div><\/div>$/);
-  assert.match(detail, /<\/h1><p class="note">[^<]+<\/p><div class="counts"><div class="count"><b>7<\/b><span>Exhibits<\/span><\/div><\/div><dl class="meta">/);
+  assert.match(caseHeader, /<div class="counts"><div class="count pass"><b>3<\/b><span>Passed<\/span><\/div><div class="count fail"><b>2<\/b><span>Failed<\/span><\/div><div class="count"><b>7<\/b><span>Exhibits<\/span><\/div><\/div>$/);
+  assert.match(detail, /<\/h1><p class="note">[^<]+<\/p><dl class="meta">/);
   assert.match(detail, /<\/section><nav class="case-navigation"[^>]*><button[^>]*disabled[^>]*aria-label="Previous case".*?<\/button><button[^>]*disabled[^>]*aria-label="Next case".*?<\/button><\/nav><section class="evidence">/s);
   assert.match(detail, /<\/figure><\/div><p class="note">The basket count increases and the confirmation appears\.<\/p><button class="icon-control compare-toggle" aria-label="Open full-screen slider"[^>]*aria-haspopup="dialog"><svg/);
   assert.match(detail, /class="screenshot-pair"[^>]*><figure><figcaption class="label">Before<\/figcaption>.*?<figcaption class="label">After<\/figcaption>/s);
@@ -225,6 +225,7 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   await writeFile(join(runs, dirty.id, "run.json"), JSON.stringify(dirty));
   const changedCase = (locale) => dump(`?lang=${locale}#case/${dirty.id}`, `${locale}-dirty-profile`);
   const [changed, changedKo, changedJa] = await Promise.all(["en", "ko", "ja"].map(changedCase));
+  assert.match(changed, /<div class="count"><b>0<\/b><span>Exhibits<\/span><\/div><\/div><\/header>/);
   assert.match(changed, /<dt>Started<\/dt><dd><details><summary title="a{64}">Uncommitted changes \(2 files, hash a{12}\)<\/summary>/);
   assert.match(changed, /<dt>Ended<\/dt><dd><details><summary>Uncommitted changes \(1 file, hash unavailable\)<\/summary>/);
   assert.match(changed, /<ul><li><code>src\/cart\.js<\/code><\/li><li><code>&lt;img src=x onerror=alert\(1\)&gt;<\/code><\/li><\/ul>/);
@@ -303,7 +304,7 @@ test("case header fits the card and case arrows stay in their gutters", { skip: 
       overflow: document.documentElement.scrollWidth > viewport,
       headerFits: back.left === heading.left && back.right <= identity.left && identity.right <= counts.left &&
         counts.right === band.right && band.bottom + 8 <= heading.top,
-      failedCount: summary.querySelector(".case-header .count:last-child b").textContent,
+      counts: [...summary.querySelectorAll(".case-header .count b")].map((number) => number.textContent),
     };
     const checkBadges = result.locale === "en" && viewport <= 390;
     if (viewport === 320 || checkBadges) {
@@ -342,9 +343,9 @@ test("case header fits the card and case arrows stay in their gutters", { skip: 
   assert.equal(results.length, viewports.length * locales.length);
   for (const result of results) {
     assert.ok(result.headerFits && !result.overflow, JSON.stringify(result));
-    assert.equal(result.failedCount, "0");
+    assert.deepEqual(result.counts, ["16", "0", "16"]);
     if (result.viewport === 320) {
-      assert.deepEqual(result.enlargedCountLines, [1, 1], JSON.stringify(result));
+      assert.deepEqual(result.enlargedCountLines, [1, 1, 1], JSON.stringify(result));
       assert.equal(result.enlargedOverflow, false, JSON.stringify(result));
     }
     if (result.locale === "en" && result.viewport <= 390) {

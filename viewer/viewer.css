@@ -279,12 +279,20 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .git-changes summary { cursor: pointer; font-weight: 600; }
 .git-changes ul { margin: 4px 0; padding-inline-start: 20px; }
 .git-changes li code { white-space: pre-wrap; }
-.counts { gap: 8px 20px; margin-top: 16px; }
-.count { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; color: var(--al-ink-2); font-size: .875rem; }
-.case-header .counts { max-width: 100%; justify-content: flex-end; gap: 4px 12px; margin-top: 0; margin-inline-start: auto; }
-.case-header .count { min-width: 0; justify-content: flex-end; gap: 2px 6px; text-align: end; overflow-wrap: break-word; }
-.count b { font: 600 var(--al-text-lg)/1 var(--al-font-mono); white-space: nowrap; }
-.case-header .count b { line-height: 1.35; }
+.counts { max-width: 100%; justify-content: flex-end; gap: 4px 12px; margin-inline-start: auto; }
+.count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 2px 6px;
+  min-width: 0;
+  color: var(--al-ink-2);
+  font-size: .875rem;
+  text-align: end;
+  overflow-wrap: break-word;
+}
+.count b { font: 600 var(--al-text-lg)/1.35 var(--al-font-mono); white-space: nowrap; }
 .count.pass b { color: var(--al-pass); }
 .count.fail b { color: var(--al-fail); }
 
