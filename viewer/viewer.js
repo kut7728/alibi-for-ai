@@ -346,32 +346,17 @@ function renderScreenshots(runId, step) {
       return el("figure", "", el("figcaption", "label", label), el("div", "thumb", picture(side, label)));
     }));
     if (step.before && step.after && failed.size === 0) {
-      const handle = el("span", "handle");
-      handle.setAttribute("aria-hidden", "true");
-      const slider = el("input", "");
-      slider.type = "range";
-      slider.min = "0";
-      slider.max = "100";
-      slider.value = "50";
-      slider.setAttribute("aria-label", t("comparison", { action: step.action }));
-      const update = () => {
-        pair.style.setProperty("--position", `${slider.value}%`);
-        const position = Number(slider.value) / 100;
-        slider.setAttribute("aria-valuetext", t("position", {
-          before: formats.percent.format(position), after: formats.percent.format(1 - position),
-        }));
-      };
-      slider.addEventListener("input", update);
-      update();
-      slider.hidden = handle.hidden = true;
-      pair.append(handle, slider);
       const toggle = el("button", "compare-toggle", t("showSlider"));
       toggle.type = "button";
+      toggle.setAttribute("aria-haspopup", "dialog");
+      let dialog;
       toggle.addEventListener("click", () => {
-        const useSlider = slider.hidden;
-        slider.hidden = handle.hidden = !useSlider;
-        pair.classList.toggle("comparison", useSlider);
-        toggle.textContent = t(useSlider ? "showBothScreenshots" : "showSlider");
+        if (!dialog) {
+          dialog = renderComparison(step.action, sides.map((side) => picture(side, t(side))));
+          dialog.addEventListener("close", () => toggle.focus({ preventScroll: true }));
+          screenshots.append(dialog);
+        }
+        dialog.showModal();
       });
       screenshots.replaceChildren(toggle, pair);
     } else {
@@ -387,6 +372,48 @@ function renderScreenshots(runId, step) {
   const content = el("div", "exhibit-body", screenshots);
   if (step.note) content.append(el("p", "note", step.note));
   return content;
+}
+
+function renderComparison(action, images) {
+  const label = t("comparison", { action });
+  const close = el("button", "compare-toggle", t("closeComparison"));
+  close.type = "button";
+  close.autofocus = true;
+  const handle = el("span", "handle");
+  handle.setAttribute("aria-hidden", "true");
+  const slider = el("input", "");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "100";
+  slider.value = "50";
+  slider.setAttribute("aria-label", label);
+  images[1].classList.add("after");
+  const comparison = el("div", "comparison", ...images, handle, slider);
+  const frame = el("div", "compare-frame",
+    el("div", "compare-captions label", el("span", "", t("before")), el("span", "", t("after"))),
+    comparison);
+  const dialog = el("dialog", "compare-dialog",
+    el("header", "compare-head", el("h2", "", action), close),
+    el("div", "compare-viewport", frame));
+  dialog.setAttribute("aria-label", label);
+  close.addEventListener("click", () => dialog.close());
+  const update = () => {
+    comparison.style.setProperty("--position", `${slider.value}%`);
+    const position = Number(slider.value) / 100;
+    slider.setAttribute("aria-valuetext", t("position", {
+      before: formats.percent.format(position), after: formats.percent.format(1 - position),
+    }));
+  };
+  const sizeFrame = () => {
+    const width = Math.max(...images.map((image) => image.naturalWidth));
+    const height = Math.max(...images.map((image) => image.naturalHeight));
+    if (width && height) frame.style.setProperty("--capture-ratio", width / height);
+  };
+  for (const image of images) image.addEventListener("load", sizeFrame);
+  sizeFrame();
+  slider.addEventListener("input", update);
+  update();
+  return dialog;
 }
 
 function renderCheck(check) {

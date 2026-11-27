@@ -271,31 +271,62 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 .screenshot-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; }
 .screenshot-pair.single { grid-template-columns: repeat(2, minmax(0, 280px)); }
 .screenshot-pair figure { display: grid; grid-template-rows: auto 1fr; gap: 6px; min-width: 0; }
-.comparison, .thumb {
+.thumb, .comparison {
   border: 1px solid var(--al-line);
   border-radius: 6px;
   background: var(--al-surface-2);
 }
 .thumb { display: grid; align-items: center; overflow: hidden; }
-.comparison {
-  display: block;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  aspect-ratio: 16 / 10;
-  max-width: 560px;
-}
-.comparison:focus-within { outline: 2px solid var(--al-focus); outline-offset: 3px; }
 .shot {
   display: block;
   width: 100%;
   height: auto;
   object-fit: contain;
 }
-.comparison .thumb, .comparison input { position: absolute; inset: 0; }
-.comparison .thumb { border: 0; border-radius: 0; }
-.comparison .shot { height: 100%; }
-.comparison figure + figure .thumb { clip-path: inset(0 0 0 var(--position, 50%)); }
+body:has(.compare-dialog[open]) { overflow: hidden; }
+.compare-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: clamp(12px, 2.5vw, 24px);
+  border: 0;
+  background: var(--al-paper);
+  color: var(--al-ink);
+}
+.compare-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+.compare-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.compare-head h2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.3;
+}
+.compare-head .compare-toggle {
+  flex: none;
+  min-height: 44px;
+  background: var(--al-ink);
+  border-color: var(--al-ink);
+  color: var(--al-paper);
+}
+.compare-viewport { display: grid; place-items: center; container-type: size; }
+.compare-frame {
+  --capture-ratio: 1.6;
+  display: grid;
+  gap: .5rem;
+  width: min(100%, calc(max(0px, 100cqh - 1.5rem) * var(--capture-ratio)));
+}
+.compare-captions { display: flex; justify-content: space-between; gap: 8px; }
+.comparison { position: relative; overflow: hidden; aspect-ratio: var(--capture-ratio); }
+.comparison:focus-within { outline: 2px solid var(--al-focus); outline-offset: 3px; }
+.comparison .shot, .comparison input { position: absolute; inset: 0; }
+.comparison .shot { height: 100%; background: var(--al-surface-2); }
+.comparison .after { clip-path: inset(0 0 0 var(--position, 50%)); }
 .handle { position: absolute; inset: 0 auto 0 clamp(1px, var(--position, 50%), 100% - 1px); width: 2px; margin-left: -1px; background: var(--al-tape); }
 .handle::after {
   content: "⇆";
@@ -311,18 +342,7 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
   place-items: center;
   font-weight: 700;
 }
-.comparison figcaption {
-  position: absolute;
-  z-index: 1;
-  inset: auto auto 8px 8px;
-  pointer-events: none;
-  background: rgb(20 23 29 / .85);
-  color: #fff;
-  border-radius: 3px;
-  padding: 5px 6px;
-}
-.comparison figure + figure figcaption { inset-inline: auto 8px; }
-.comparison input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: ew-resize; }
+.comparison input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: ew-resize; touch-action: none; }
 .thumb:has(.missing) { min-height: 88px; aspect-ratio: 16 / 10; border-style: dashed; background: var(--al-surface); }
 .missing {
   display: grid;
