@@ -164,7 +164,12 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(list, /<img\b/);
   assert.match(list, /Alibi broken/);
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
-  assert.match(detail, /type="range"/);
+  assert.match(detail, /<button class="compare-toggle" type="button">Use comparison slider<\/button>/);
+  assert.match(detail, /class="screenshot-pair"[^>]*><figure><figcaption class="label">Before<\/figcaption>.*?<figcaption class="label">After<\/figcaption>/s);
+  assert.match(detail, /<input type="range"[^>]* hidden=""/);
+  assert.doesNotMatch(detail, /class="screenshot-pair comparison"/);
+  assert.match(detail, /class="screenshot-pair single"/);
+  assert.equal((detail.match(/class="compare-toggle"/g) ?? []).length, 2);
   assert.match(detail, /No screenshot recorded/);
   assert.doesNotMatch(detail, /class="git-changes"/);
   assert.match(detail, /<pre>null<\/pre>/);
@@ -182,10 +187,12 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(ko, /<html lang="ko"/);
   assert.match(ko, /한국어" aria-pressed="true"/);
   assert.match(ko, /aria-label="Add Grid Linen to the basket의 변경 전후 비교"/);
+  assert.match(ko, />슬라이더로 비교<\/button>/);
   assert.match(ko, /증거 타임라인/);
   assert.match(ko, /기댓값이 설정되지 않음/);
   assert.match(ja, /<html lang="ja"/);
   assert.match(ja, /日本語" aria-pressed="true"/);
+  assert.match(ja, />スライダーで比較<\/button>/);
   assert.match(ja, /証拠のタイムライン/);
   assert.match(ja, /期待値が設定されていません/);
   for (const localized of [ko, ja]) {
