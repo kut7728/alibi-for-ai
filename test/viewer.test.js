@@ -167,8 +167,9 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(list, /<img\b/);
   assert.match(list, /Alibi broken/);
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
-  assert.match(detail, /class="summary"><nav class="case-navigation"[^>]*>.*?<button[^>]*disabled[^>]*aria-label="Previous case".*?<a class="case-back" href="#">Back to case files<\/a>.*?<button[^>]*disabled[^>]*aria-label="Next case"/s);
-  assert.match(detail, /class="icon-control compare-toggle" aria-label="Open full-screen slider"[^>]*aria-haspopup="dialog"><svg/);
+  assert.match(detail, /class="summary"><nav class="case-navigation"[^>]*><button[^>]*disabled[^>]*aria-label="Previous case".*?<\/button><button[^>]*disabled[^>]*aria-label="Next case".*?<\/button><\/nav>/s);
+  assert.match(detail, /class="case-heading"><a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><h1/s);
+  assert.match(detail, /<\/figure><\/div><p class="note">The basket count increases and the confirmation appears\.<\/p><button class="icon-control compare-toggle" aria-label="Open full-screen slider"[^>]*aria-haspopup="dialog"><svg/);
   assert.match(detail, /class="screenshot-pair"[^>]*><figure><figcaption class="label">Before<\/figcaption>.*?<figcaption class="label">After<\/figcaption>/s);
   assert.match(detail, /class="shot-open"[^>]*aria-label="Enlarge Before screenshot — [^"]*"[^>]*><img[^>]*><\/button><button class="icon-control shot-copy" aria-label="Copy Before screenshot — /);
   assert.doesNotMatch(detail, /type="range"|<dialog/);
@@ -193,13 +194,13 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(ko, /<html lang="ko"/);
   assert.match(ko, /한국어" aria-pressed="true"/);
   assert.match(ko, /aria-label="전체 화면에서 슬라이더 열기"/);
-  assert.match(ko, /사건 기록으로 돌아가기<\/a>/);
+  assert.match(ko, /aria-label="사건 기록으로 돌아가기"/);
   assert.match(ko, /증거 타임라인/);
   assert.match(ko, /기댓값이 설정되지 않음/);
   assert.match(ja, /<html lang="ja"/);
   assert.match(ja, /日本語" aria-pressed="true"/);
   assert.match(ja, /aria-label="全画面でスライダーを開く"/);
-  assert.match(ja, /事件記録に戻る<\/a>/);
+  assert.match(ja, /aria-label="事件記録に戻る"/);
   assert.match(ja, /証拠のタイムライン/);
   assert.match(ja, /期待値が設定されていません/);
   for (const localized of [ko, ja]) {

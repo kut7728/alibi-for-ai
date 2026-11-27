@@ -320,10 +320,10 @@ function showCase(run) {
   };
   const navigation = el("nav", "case-navigation",
     arrow(-1, "previousCase", "m15 5-7 7 7 7"),
-    link(t("back"), "#", "case-back"),
     arrow(1, "nextCase", "m9 5 7 7-7 7"));
   navigation.setAttribute("aria-label", t("caseNavigation"));
-  const summary = el("section", "summary", navigation, caseHeader, title);
+  const back = iconControl(link("", "#", "icon-control case-back"), t("back"), "M19 12H5m7-7-7 7 7 7");
+  const summary = el("section", "summary", navigation, caseHeader, el("div", "case-heading", back, title));
   if (run.summary) summary.append(el("p", "note", run.summary));
   summary.append(counts, meta);
   app.append(summary);
@@ -460,6 +460,7 @@ function renderScreenshots(runId, step) {
   screenshots.setAttribute("role", "group");
   screenshots.setAttribute("aria-label", t("screenshots"));
   screenshots.append(pair);
+  if (step.note) screenshots.append(el("p", "note", step.note));
   if (pictures.every(Boolean)) {
     toggle = iconControl(el("button", "icon-control compare-toggle"), t("showSlider"),
       "M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5m8-11v16");
@@ -469,9 +470,7 @@ function renderScreenshots(runId, step) {
       comparison ??= renderComparison(step.action, pictures.map((picture) => picture())), toggle));
     screenshots.append(toggle);
   } else pair.classList.add("single");
-  const content = el("div", "exhibit-body", screenshots);
-  if (step.note) content.append(el("p", "note", step.note));
-  return content;
+  return el("div", "exhibit-body", screenshots);
 }
 
 function showScreenshotDialog(container, dialog, trigger) {
