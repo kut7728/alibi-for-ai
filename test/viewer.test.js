@@ -167,11 +167,15 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(list, /<img\b/);
   assert.match(list, /Alibi broken/);
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
-  assert.match(detail, /<button class="compare-toggle" type="button" aria-haspopup="dialog">Open full-screen slider<\/button>/);
+  assert.match(detail, /class="summary"><nav class="case-navigation"[^>]*>.*?<button[^>]*disabled[^>]*aria-label="Previous case".*?<a class="case-back" href="#">Back to case files<\/a>.*?<button[^>]*disabled[^>]*aria-label="Next case"/s);
+  assert.match(detail, /class="icon-control compare-toggle" aria-label="Open full-screen slider"[^>]*aria-haspopup="dialog"><svg/);
   assert.match(detail, /class="screenshot-pair"[^>]*><figure><figcaption class="label">Before<\/figcaption>.*?<figcaption class="label">After<\/figcaption>/s);
+  assert.match(detail, /class="shot-open"[^>]*aria-label="Enlarge Before screenshot — [^"]*"[^>]*><img[^>]*><\/button><button class="icon-control shot-copy" aria-label="Copy Before screenshot — /);
   assert.doesNotMatch(detail, /type="range"|<dialog/);
+  assert.doesNotMatch(detail, /exhibit-time/);
   assert.match(detail, /class="screenshot-pair single"/);
-  assert.equal((detail.match(/class="compare-toggle"/g) ?? []).length, 2);
+  assert.equal((detail.match(/class="icon-control compare-toggle"/g) ?? []).length, 2);
+  assert.equal((detail.match(/class="shot-open"/g) ?? []).length, 5);
   assert.match(detail, /No screenshot recorded/);
   assert.doesNotMatch(detail, /class="git-changes"/);
   assert.match(detail, /<pre>null<\/pre>/);
@@ -188,12 +192,14 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   ]);
   assert.match(ko, /<html lang="ko"/);
   assert.match(ko, /한국어" aria-pressed="true"/);
-  assert.match(ko, />전체 화면에서 슬라이더 열기<\/button>/);
+  assert.match(ko, /aria-label="전체 화면에서 슬라이더 열기"/);
+  assert.match(ko, /사건 기록으로 돌아가기<\/a>/);
   assert.match(ko, /증거 타임라인/);
   assert.match(ko, /기댓값이 설정되지 않음/);
   assert.match(ja, /<html lang="ja"/);
   assert.match(ja, /日本語" aria-pressed="true"/);
-  assert.match(ja, />全画面でスライダーを開く<\/button>/);
+  assert.match(ja, /aria-label="全画面でスライダーを開く"/);
+  assert.match(ja, /事件記録に戻る<\/a>/);
   assert.match(ja, /証拠のタイムライン/);
   assert.match(ja, /期待値が設定されていません/);
   for (const localized of [ko, ja]) {
@@ -219,9 +225,11 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(changed, /<details open|<img\b/);
   assert.match(changedKo, /커밋되지 않은 변경 사항 \(파일 2개, 해시 a{12}\)/);
   assert.match(changedJa, /未コミットの変更（2 ファイル、ハッシュ a{12}）/);
+  assert.match(changed, new RegExp(`href="#case/${sample.id}" aria-label="Previous case"`));
+  assert.match(changed, /<button[^>]*disabled[^>]*aria-label="Next case"/);
 });
 
-test("full-screen comparison fits tall screenshots in short and narrow viewports", { skip: !chromium, timeout: 15000 }, async (t) => {
+test("full-screen screenshot dialogs fit extreme images in short and narrow viewports", { skip: !chromium, timeout: 15000 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), "alibai-comparison-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   async function measure() {
@@ -240,9 +248,30 @@ test("full-screen comparison fits tall screenshots in short and narrow viewports
     dialog.showModal();
     const captions = dialog.querySelector(".compare-captions").getBoundingClientRect();
     const { width, height, top, bottom } = dialog.querySelector(".comparison").getBoundingClientRect();
+    const scrollHeight = dialog.scrollHeight;
+    dialog.close();
+    const previews = [];
+    for (const dimensions of [[390, 5000], [5000, 100]]) {
+      [canvas.width, canvas.height] = dimensions;
+      const image = new Image();
+      image.className = "shot";
+      image.src = canvas.toDataURL("image/png");
+      await image.decode();
+      const preview = screenshotDialog("Capture", "Capture", "closeScreenshot", el("div", "image-viewport", image));
+      document.body.append(preview);
+      preview.showModal();
+      previews.push({
+        fit: getComputedStyle(image).objectFit,
+        image: image.getBoundingClientRect().toJSON(),
+        area: preview.querySelector(".image-viewport").getBoundingClientRect().toJSON(),
+        scrollHeight: preview.scrollHeight,
+        focused: document.activeElement === preview.querySelector("button"),
+      });
+      preview.close();
+    }
     parent.postMessage({
       locale: document.documentElement.lang, viewport: [innerWidth, innerHeight],
-      width, height, top, bottom, captionsBottom: captions.bottom, scrollHeight: dialog.scrollHeight,
+      width, height, top, bottom, captionsBottom: captions.bottom, scrollHeight, previews,
     }, "*");
   }
   const script = join(root, "measure.js");
@@ -268,9 +297,15 @@ test("full-screen comparison fits tall screenshots in short and narrow viewports
     for (const locale of locales) {
       const result = results.find((item) => item.locale === locale && String(item.viewport) === String(viewport));
       assert.ok(result, `Missing result for ${locale} at ${viewport}`);
-      const { width, height, top, bottom, captionsBottom, scrollHeight } = result;
+      const { width, height, top, bottom, captionsBottom, scrollHeight, previews } = result;
       assert.ok(Math.abs(width / height - 390 / 5000) < .002, JSON.stringify(result));
       assert.ok(top >= captionsBottom && bottom <= viewport[1] && scrollHeight <= viewport[1], JSON.stringify(result));
+      assert.equal(previews.length, 2);
+      for (const preview of previews) {
+        assert.equal(preview.fit, "contain");
+        assert.deepEqual(preview.image, preview.area);
+        assert.ok(preview.focused && preview.image.height > 0 && preview.scrollHeight <= viewport[1], JSON.stringify(preview));
+      }
     }
   }
 });
