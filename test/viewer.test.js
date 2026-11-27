@@ -167,8 +167,8 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(list, /<img\b/);
   assert.match(list, /Alibi broken/);
   const detail = await dump(`?lang=en#case/${sample.id}`, "detail-profile");
-  assert.match(detail, /class="summary"><nav class="case-navigation"[^>]*><button[^>]*disabled[^>]*aria-label="Previous case".*?<\/button><button[^>]*disabled[^>]*aria-label="Next case".*?<\/button><\/nav>/s);
-  assert.match(detail, /class="case-heading"><a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><h1/s);
+  assert.match(detail, /class="case-detail"><section class="summary"><a class="icon-control case-back" href="#" aria-label="Back to case files"[^>]*><svg.*?<\/svg><\/a><div class="case-header".*?<\/div><h1/s);
+  assert.match(detail, /<\/section><nav class="case-navigation"[^>]*><button[^>]*disabled[^>]*aria-label="Previous case".*?<\/button><button[^>]*disabled[^>]*aria-label="Next case".*?<\/button><\/nav><section class="evidence">/s);
   assert.match(detail, /<\/figure><\/div><p class="note">The basket count increases and the confirmation appears\.<\/p><button class="icon-control compare-toggle" aria-label="Open full-screen slider"[^>]*aria-haspopup="dialog"><svg/);
   assert.match(detail, /class="screenshot-pair"[^>]*><figure><figcaption class="label">Before<\/figcaption>.*?<figcaption class="label">After<\/figcaption>/s);
   assert.match(detail, /class="shot-open"[^>]*aria-label="Enlarge Before screenshot — [^"]*"[^>]*><img[^>]*><\/button><button class="icon-control shot-copy" aria-label="Copy Before screenshot — /);
@@ -250,6 +250,64 @@ async function probeViewports(t, probe, viewports, locales) {
   const html = await dumpChromium(pathToFileURL(page).href, join(root, "profile"));
   return [...html.matchAll(/<output>(.*?)<\/output>/g)].map(([, result]) => JSON.parse(result));
 }
+
+test("case arrows stay in their gutters through the last exhibit", { skip: !chromium, timeout: 15000 }, async (t) => {
+  async function measure() {
+    if (app.hasAttribute("aria-busy")) {
+      await new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+          observer.disconnect();
+          resolve();
+        });
+        observer.observe(app, { attributeFilter: ["aria-busy"] });
+      });
+    }
+    const checks = Array.from({ length: 16 }, (_, index) => ({
+      target: "verifyBasket()", createdAt: new Date(index).toISOString(), input: [], before: 1, after: 2, result: "pass",
+    }));
+    const run = {
+      id: "middle", title: "아주 긴 사건 제목입니다 ".repeat(12), verdict: "pass", git: {},
+      createdAt: checks[0].createdAt, endedAt: checks.at(-1).createdAt, steps: [], checks,
+    };
+    files = { runs: [{ id: "first", title: "First", git: {} }, run, { id: "last", title: "Last", git: {} }] };
+    app.replaceChildren();
+    const title = showCase(run);
+    const summary = app.querySelector(".summary");
+    const back = summary.querySelector(".case-back").getBoundingClientRect();
+    const heading = title.getBoundingClientRect();
+    const arrows = [...app.querySelectorAll(".case-navigation a")];
+    const exhibits = app.querySelectorAll(".exhibit");
+    const evidence = app.querySelector(".evidence");
+    const viewport = document.documentElement.clientWidth;
+    const positions = [null, exhibits[8], exhibits[15]].map((exhibit) => {
+      exhibit?.scrollIntoView({ block: "center" });
+      const content = (exhibit ? evidence : summary).getBoundingClientRect();
+      const [left, right] = arrows.map((arrow) => arrow.getBoundingClientRect());
+      return {
+        scroll: scrollY,
+        center: left.top + left.height / 2,
+        gutters: left.left >= 5 && left.right + 8 <= content.left &&
+          right.left - 8 >= content.right && right.right <= viewport - 5 && left.top === right.top,
+        targets: [left, right].every(({ width, height }) => width >= 44 && height >= 44),
+      };
+    });
+    parent.postMessage({
+      viewport, height: innerHeight, positions, overflow: document.documentElement.scrollWidth > viewport,
+      backAboveHeading: back.bottom + 8 <= heading.top && back.left === heading.left,
+    }, "*");
+  }
+  const viewports = [[320, 740], [390, 844], [1280, 900]];
+  const results = await probeViewports(t, measure, viewports, ["ko"]);
+  assert.equal(results.length, viewports.length);
+  for (const result of results) {
+    assert.ok(result.backAboveHeading && !result.overflow, JSON.stringify(result));
+    const [top, middle, last] = result.positions;
+    assert.ok(top.scroll === 0 && middle.scroll > result.height && last.scroll > middle.scroll, JSON.stringify(result));
+    for (const position of result.positions) {
+      assert.ok(position.gutters && position.targets && Math.abs(position.center - result.height / 2) <= 1, JSON.stringify(result));
+    }
+  }
+});
 
 test("full-screen screenshot dialogs fit extreme images and survive rapid reopen", { skip: !chromium, timeout: 15000 }, async (t) => {
   async function measure() {

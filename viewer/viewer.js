@@ -323,14 +323,14 @@ function showCase(run) {
     arrow(1, "nextCase", "m9 5 7 7-7 7"));
   navigation.setAttribute("aria-label", t("caseNavigation"));
   const back = iconControl(link("", "#", "icon-control case-back"), t("back"), "M19 12H5m7-7-7 7 7 7");
-  const summary = el("section", "summary", navigation, caseHeader, el("div", "case-heading", back, title));
+  const summary = el("section", "summary", back, caseHeader, title);
   if (run.summary) summary.append(el("p", "note", run.summary));
   summary.append(counts, meta);
-  app.append(summary);
-  app.append(el("section", "evidence",
+  const evidence = el("section", "evidence",
     el("h2", "", t("timeline")),
     exhibits.length ? el("ol", "timeline", ...exhibits.map((exhibit, index) => renderExhibit(run, exhibit, index)))
-      : el("p", "empty", t("noExhibits"))));
+      : el("p", "empty", t("noExhibits")));
+  app.append(el("div", "case-detail", summary, navigation, evidence));
   return title;
 }
 
