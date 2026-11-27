@@ -5,6 +5,11 @@ const breadcrumb = document.getElementById("breadcrumb");
 const theme = document.getElementById("theme");
 const languages = document.getElementById("languages");
 const languageButtons = languages.querySelectorAll("button");
+const copyStatus = el("p", "copy-status");
+copyStatus.setAttribute("role", "status");
+document.body.append(copyStatus);
+let copyRequest = 0;
+let copyTimeout;
 const themes = ["System", "Light", "Dark"];
 let themeIndex = Math.max(0, themes.indexOf(readPreference("alibai-theme")));
 const url = new URL(location.href);
@@ -358,87 +363,102 @@ async function screenshotPng(image) {
   });
 }
 
+async function copyScreenshot(image, button, label) {
+  const request = ++copyRequest;
+  clearTimeout(copyTimeout);
+  copyStatus.textContent = "";
+  let png;
+  let message;
+  try {
+    // Start the clipboard write within the gesture, even when PNG data is still pending.
+    if (!navigator.clipboard?.write || !window.ClipboardItem) throw new Error("Image clipboard unavailable");
+    png = screenshotPng(image);
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    message = "screenshotCopied";
+  } catch {
+    png?.catch(() => {});
+    message = "screenshotCopyFailed";
+  }
+  if (request !== copyRequest || !button.isConnected) return;
+  copyStatus.textContent = t(message, { label });
+  const anchor = button.getBoundingClientRect();
+  const { width, height } = copyStatus.getBoundingClientRect();
+  const viewport = document.documentElement;
+  const gap = 8;
+  const below = anchor.bottom + gap;
+  const bottom = viewport.clientHeight - gap - height;
+  const top = below <= bottom ? below : anchor.top - gap - height;
+  copyStatus.style.top = `${Math.max(gap, Math.min(top, bottom))}px`;
+  copyStatus.style.left = `${Math.max(gap, Math.min(anchor.right, viewport.clientWidth - gap) - width)}px`;
+  copyTimeout = setTimeout(() => { copyStatus.textContent = ""; }, 4000);
+}
+
 function renderScreenshots(runId, step) {
   const screenshots = el("div", "screenshots");
-  const status = el("p", "copy-status");
-  status.setAttribute("role", "status");
-  const failed = new Set();
-  const sides = ["before", "after"];
-
-  function picture(side, label) {
-    if (!step[side] || failed.has(side)) {
-      return el("div", "missing", t(failed.has(side) ? "screenshotError" : "noScreenshot"));
+  const pair = el("div", "screenshot-pair");
+  let toggle;
+  let comparison;
+  const pictures = ["before", "after"].map((side) => {
+    const label = t(side);
+    const thumb = el("div", "thumb");
+    pair.append(el("figure", "", el("figcaption", "label", label), thumb));
+    if (!step[side]) {
+      thumb.append(el("div", "missing", t("noScreenshot")));
+      return null;
     }
-    const img = el("img", "shot");
-    img.alt = t("screenshotAlt", { label, action: step.action });
-    img.addEventListener("error", () => {
-      if (failed.has(side)) return;
-      failed.add(side);
-      const hadFocus = screenshots.contains(document.activeElement);
-      screenshots.querySelector("dialog[open]")?.close();
-      draw();
-      if (hadFocus) screenshots.focus({ preventScroll: true });
-    }, { once: true });
-    img.src = `./screenshots/${runId}/${encodeURIComponent(step[side].split("/")[1])}`;
-    return img;
-  }
 
-  function draw() {
-    const pair = el("div", "screenshot-pair", ...sides.map((side) => {
-      const label = t(side);
-      const thumb = el("div", "thumb");
-      const image = picture(side, label);
-      if (image.matches("img")) {
-        const enlarge = el("button", "shot-open", image);
-        enlarge.type = "button";
-        enlarge.setAttribute("aria-label", t("enlargeScreenshot", { label, action: step.action }));
-        enlarge.setAttribute("aria-haspopup", "dialog");
-        enlarge.addEventListener("click", () => {
-          const dialog = screenshotDialog(image.alt, image.alt, "closeScreenshot",
-            el("div", "image-viewport", picture(side, label)));
-          dialog.addEventListener("close", () => dialog.remove(), { once: true });
-          showScreenshotDialog(screenshots, dialog, enlarge);
-        });
-        const copy = iconControl(el("button", "icon-control shot-copy"), t("copyScreenshot", { label, action: step.action }),
-          "M8 8h12v12H8z M16 8V4H4v12h4");
-        copy.type = "button";
-        copy.addEventListener("click", async () => {
-          status.textContent = "";
-          let png;
-          try {
-            // Start the clipboard write within the gesture, even when PNG data is still pending.
-            if (!navigator.clipboard?.write || !window.ClipboardItem) throw new Error("Image clipboard unavailable");
-            png = screenshotPng(image);
-            await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-            status.textContent = t("screenshotCopied", { label });
-          } catch {
-            png?.catch(() => {});
-            status.textContent = t("screenshotCopyFailed", { label });
-          }
-        });
-        thumb.append(enlarge, copy);
-      } else thumb.append(image);
-      return el("figure", "", el("figcaption", "label", label), thumb);
-    }));
-    screenshots.replaceChildren(pair, status);
-    if (step.before && step.after && failed.size === 0) {
-      const toggle = iconControl(el("button", "icon-control compare-toggle"), t("showSlider"),
-        "M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5m8-11v16");
-      toggle.type = "button";
-      toggle.setAttribute("aria-haspopup", "dialog");
-      let dialog;
-      toggle.addEventListener("click", () => showScreenshotDialog(screenshots,
-        dialog ??= renderComparison(step.action, sides.map((side) => picture(side, t(side)))), toggle));
-      pair.after(toggle);
-    } else {
-      pair.classList.add("single");
-    }
-  }
+    let preview;
+    const unavailable = () => {
+      if (!enlarge.isConnected) return;
+      const focus = document.activeElement;
+      const restoreFocus = thumb.contains(focus) || focus === toggle || preview?.open || comparison?.open;
+      preview?.close();
+      comparison?.close();
+      comparison?.remove();
+      toggle?.remove();
+      thumb.replaceChildren(el("div", "missing", t("screenshotError")));
+      if (restoreFocus) screenshots.focus({ preventScroll: true });
+    };
+    const picture = () => {
+      const img = el("img", "shot");
+      img.alt = t("screenshotAlt", { label, action: step.action });
+      img.addEventListener("error", unavailable, { once: true });
+      img.src = `./screenshots/${runId}/${encodeURIComponent(step[side].split("/")[1])}`;
+      return img;
+    };
+    const image = picture();
+    const enlarge = el("button", "shot-open", image);
+    enlarge.type = "button";
+    enlarge.setAttribute("aria-label", t("enlargeScreenshot", { label, action: step.action }));
+    enlarge.setAttribute("aria-haspopup", "dialog");
+    enlarge.addEventListener("click", () => {
+      const dialog = screenshotDialog(image.alt, image.alt, "closeScreenshot",
+        el("div", "image-viewport", picture()));
+      preview = dialog;
+      dialog.addEventListener("close", () => dialog.remove(), { once: true });
+      showScreenshotDialog(screenshots, dialog, enlarge);
+    });
+    const copy = iconControl(el("button", "icon-control shot-copy"), t("copyScreenshot", { label, action: step.action }),
+      "M8 8h12v12H8z M16 8V4H4v12h4");
+    copy.type = "button";
+    copy.addEventListener("click", () => copyScreenshot(image, copy, label));
+    thumb.append(enlarge, copy);
+    return picture;
+  });
 
   screenshots.tabIndex = -1;
   screenshots.setAttribute("role", "group");
   screenshots.setAttribute("aria-label", t("screenshots"));
-  draw();
+  screenshots.append(pair);
+  if (pictures.every(Boolean)) {
+    toggle = iconControl(el("button", "icon-control compare-toggle"), t("showSlider"),
+      "M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5m8-11v16");
+    toggle.type = "button";
+    toggle.setAttribute("aria-haspopup", "dialog");
+    toggle.addEventListener("click", () => showScreenshotDialog(screenshots,
+      comparison ??= renderComparison(step.action, pictures.map((picture) => picture())), toggle));
+    screenshots.append(toggle);
+  } else pair.classList.add("single");
   const content = el("div", "exhibit-body", screenshots);
   if (step.note) content.append(el("p", "note", step.note));
   return content;
@@ -526,6 +546,7 @@ function renderCheck(check) {
 }
 
 function render(moveFocus = false) {
+  copyStatus.textContent = "";
   document.title = `${t("caseFiles")} · alibai`;
   if (loadFailed) {
     app.replaceChildren(heading(t("caseFiles")), el("p", "error", t("loadError")));

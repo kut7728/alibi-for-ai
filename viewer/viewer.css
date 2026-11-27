@@ -331,8 +331,21 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 @media (hover: hover) and (pointer: fine) {
   .thumb:not(:hover):not(:focus-within) .shot-copy { opacity: 0; pointer-events: none; }
 }
-.copy-status { color: var(--al-ink-2); font-size: var(--al-text-sm); }
-.copy-status:empty { position: absolute; clip-path: inset(50%); }
+.copy-status {
+  position: fixed;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  color: var(--al-ink-2);
+  font-size: var(--al-text-sm);
+  pointer-events: none;
+}
+.copy-status:not(:empty) {
+  padding: 7px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--al-radius-md);
+  background: var(--al-surface);
+}
 .shot {
   display: block;
   width: 100%;

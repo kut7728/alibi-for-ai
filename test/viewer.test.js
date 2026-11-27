@@ -229,9 +229,28 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(changed, /<button[^>]*disabled[^>]*aria-label="Next case"/);
 });
 
-test("full-screen screenshot dialogs fit extreme images and survive rapid reopen", { skip: !chromium, timeout: 15000 }, async (t) => {
+async function probeViewports(t, probe, viewports, locales) {
   const root = await mkdtemp(join(tmpdir(), "alibai-comparison-"));
   t.after(() => rm(root, { recursive: true, force: true }));
+  const script = join(root, "measure.js");
+  await writeFile(script, `(${probe})();`);
+  const index = await readFile(join(viewer, "index.html"), "utf8");
+  await writeFile(join(root, "probe.html"), index
+    .replace("<head>", `<head><base href="${pathToFileURL(viewer + "/")}">`)
+    .replace("</head>", `<script defer src="${pathToFileURL(script)}"></script></head>`));
+  const frames = viewports.flatMap(([width, height]) => locales.map((locale) =>
+    `<iframe width="${width}" height="${height}" src="./probe.html?lang=${locale}"></iframe>`));
+  const page = join(root, "viewports.html");
+  await writeFile(page, `<!doctype html><script>
+    addEventListener("message", ({ data }) => {
+      document.body.appendChild(document.createElement("output")).textContent = JSON.stringify(data);
+    });
+    </script><body>${frames.join("")}</body>`);
+  const html = await dumpChromium(pathToFileURL(page).href, join(root, "profile"));
+  return [...html.matchAll(/<output>(.*?)<\/output>/g)].map(([, result]) => JSON.parse(result));
+}
+
+test("full-screen screenshot dialogs fit extreme images and survive rapid reopen", { skip: !chromium, timeout: 15000 }, async (t) => {
   async function measure() {
     const canvas = document.createElement("canvas");
     canvas.width = 390;
@@ -281,25 +300,10 @@ test("full-screen screenshot dialogs fit extreme images and survive rapid reopen
       width, height, top, bottom, captionsBottom: captions.bottom, scrollHeight, previews, reopened,
     }, "*");
   }
-  const script = join(root, "measure.js");
-  await writeFile(script, `(${measure})();`);
-  const index = await readFile(join(viewer, "index.html"), "utf8");
-  await writeFile(join(root, "probe.html"), index
-    .replace("<head>", `<head><base href="${pathToFileURL(viewer + "/")}">`)
-    .replace("</head>", `<script defer src="${pathToFileURL(script)}"></script></head>`));
   const viewports = [[320, 740], [667, 230]];
   const locales = ["en", "ko", "ja"];
-  const frames = viewports.flatMap(([width, height]) => locales.map((locale) =>
-    `<iframe width="${width}" height="${height}" src="./probe.html?lang=${locale}"></iframe>`));
-  const page = join(root, "viewports.html");
-  await writeFile(page, `<!doctype html><script>
-    addEventListener("message", ({ data }) => {
-      document.body.appendChild(document.createElement("output")).textContent = JSON.stringify(data);
-    });
-    </script><body>${frames.join("")}</body>`);
-  const html = await dumpChromium(pathToFileURL(page).href, join(root, "profile"));
-  const results = [...html.matchAll(/<output>(.*?)<\/output>/g)].map(([, result]) => JSON.parse(result));
-  assert.equal(results.length, frames.length);
+  const results = await probeViewports(t, measure, viewports, locales);
+  assert.equal(results.length, viewports.length * locales.length);
   for (const viewport of viewports) {
     for (const locale of locales) {
       const result = results.find((item) => item.locale === locale && String(item.viewport) === String(viewport));
@@ -316,4 +320,92 @@ test("full-screen screenshot dialogs fit extreme images and survive rapid reopen
       }
     }
   }
+});
+
+test("screenshot copy feedback stays visible at the control and an unrelated failed image leaves preview open", { skip: !chromium, timeout: 15000 }, async (t) => {
+  async function measure() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 390;
+    canvas.height = 5000;
+    const tall = canvas.toDataURL();
+    canvas.height = 244;
+    const short = canvas.toDataURL();
+    const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
+    Object.defineProperty(HTMLImageElement.prototype, "src", {
+      ...src, set(value) { src.set.call(this, value.endsWith("/tall.png") ? tall : short); },
+    });
+
+    const screenshots = () => renderScreenshots("probe", {
+      action: "Sample evidence", before: "screenshots/tall.png", after: "screenshots/short.png",
+    });
+    const gallery = screenshots();
+    document.body.append(gallery);
+    const copy = gallery.querySelector(".shot-copy");
+    await copy.parentNode.querySelector("img").decode();
+    copy.scrollIntoView({ block: "center" });
+    copy.focus({ preventScroll: true });
+    const status = document.querySelector(".copy-status");
+    const feedback = [];
+    for (const rejected of [false, true]) {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+        async write([item]) {
+          if (rejected) throw new DOMException("Denied", "NotAllowedError");
+          await item.getType("image/png");
+        },
+      } });
+      const updated = new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (!status.textContent) return;
+          observer.disconnect();
+          resolve();
+        });
+        observer.observe(status, { childList: true });
+      });
+      const scroll = scrollY;
+      copy.click();
+      await updated;
+      const { left, top, right, bottom } = status.getBoundingClientRect();
+      const anchor = copy.getBoundingClientRect();
+      feedback.push({
+        text: status.textContent, live: status.getAttribute("role"),
+        visible: left >= 0 && right <= innerWidth && top >= 0 && bottom <= innerHeight && bottom > top,
+        near: Math.min(Math.abs(top - anchor.bottom), Math.abs(bottom - anchor.top)) < 24,
+        stable: scrollY === scroll && document.activeElement === copy,
+      });
+    }
+    gallery.remove();
+
+    const isolated = [];
+    for (const healthyIndex of [0, 1]) {
+      const pair = screenshots();
+      document.body.append(pair);
+      const buttons = pair.querySelectorAll(".shot-open");
+      const trigger = buttons[healthyIndex];
+      const failed = buttons[1 - healthyIndex];
+      await trigger.firstElementChild.decode();
+      trigger.focus();
+      trigger.click();
+      const dialog = pair.querySelector("dialog");
+      await dialog.querySelector("img").decode();
+      failed.firstElementChild.dispatchEvent(new Event("error"));
+      const survived = dialog.open && trigger.isConnected;
+      const fallback = pair.querySelector(".missing")?.textContent;
+      const canCompare = Boolean(pair.querySelector(".compare-toggle:not(:disabled)"));
+      if (dialog.open) dialog.querySelector("button").click();
+      dialog.dispatchEvent(new Event("close"));
+      isolated.push({ survived, fallback, canCompare, focused: document.activeElement === trigger });
+      pair.remove();
+    }
+    parent.postMessage({ feedback, isolated }, "*");
+  }
+  const results = await probeViewports(t, measure, [[320, 740]], ["en"]);
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0], {
+    feedback: ["Before screenshot copied.", "Could not copy Before screenshot."].map((text) => ({
+      text, live: "status", visible: true, near: true, stable: true,
+    })),
+    isolated: Array.from({ length: 2 }, () => ({
+      survived: true, fallback: "Screenshot could not load", canCompare: false, focused: true,
+    })),
+  });
 });
