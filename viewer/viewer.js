@@ -263,7 +263,8 @@ function showCase(run) {
   for (const [label, number, tone] of [
     ["passed", count("pass"), "pass"], ["failed", count("fail"), "fail"], ["exhibits", exhibits.length, ""],
   ]) {
-    counts.append(el("div", `count ${number === 0 ? "zero" : tone}`, el("b", "", formats.count.format(number)), el("span", "label", t(label))));
+    counts.append(el("div", tone && number ? `count ${tone}` : "count",
+      el("b", "", formats.count.format(number)), el("span", "", t(label))));
   }
   const meta = el("dl", "meta");
   const sha = (value) => {
@@ -284,12 +285,12 @@ function showCase(run) {
     meta.append(el("div", "", el("dt", "", t(label)), el("dd", "", value)));
   }
   appendGitChanges(meta, run.git);
-  const stamp = result === "info" ? badge(result, verdicts[result]) : el("span", `stamp ${result}`, t(verdicts[result]));
-  if (result === "pass" || result === "fail") stamp.lang = "en";
-  const verdict = el("div", "verdict", stamp);
-  if (run.summary) verdict.append(el("p", "note", run.summary));
-  app.append(el("section", "summary",
-    el("div", "", el("p", "label case-label", t("caseNumber", { id: run.id.slice(0, 8) })), title, meta, counts), verdict));
+  const caseHeader = el("div", "case-header",
+    el("p", "label", t("caseNumber", { id: run.id.slice(0, 8) })), badge(result, verdicts[result]));
+  const summary = el("section", "summary", caseHeader, title);
+  if (run.summary) summary.append(el("p", "note", run.summary));
+  summary.append(counts, meta);
+  app.append(summary);
   app.append(el("section", "evidence",
     el("h2", "", t("timeline")),
     exhibits.length ? el("ol", "timeline", ...exhibits.map((exhibit, index) => renderExhibit(run, exhibit, index)))
@@ -318,7 +319,7 @@ function renderExhibit(run, { kind, item }, index) {
 }
 
 function renderScreenshots(runId, step) {
-  const screenshots = el("div", "");
+  const screenshots = el("div", "screenshots");
   const failed = new Set();
   const sides = ["before", "after"];
 
@@ -340,36 +341,27 @@ function renderScreenshots(runId, step) {
   }
 
   function draw() {
+    const pair = el("div", "screenshot-pair", ...sides.map((side) => {
+      const label = t(side);
+      return el("figure", "", el("figcaption", "label", label), el("div", "thumb", picture(side, label)));
+    }));
     if (step.before && step.after && failed.size === 0) {
-      const comparison = el("div", "comparison", picture("before", t("before")), picture("after", t("after")));
-      comparison.children[1].classList.add("after");
-      const handle = el("span", "handle");
-      handle.setAttribute("aria-hidden", "true");
-      const slider = el("input", "");
-      slider.type = "range";
-      slider.min = "0";
-      slider.max = "100";
-      slider.value = "50";
-      slider.setAttribute("aria-label", t("comparison", { action: step.action }));
-      const update = () => {
-        comparison.style.setProperty("--position", `${slider.value}%`);
-        const position = Number(slider.value) / 100;
-        slider.setAttribute("aria-valuetext", t("position", {
-          before: formats.percent.format(position), after: formats.percent.format(1 - position),
-        }));
-      };
-      slider.addEventListener("input", update);
-      update();
-      const captions = el("figcaption", "compare-captions",
-        el("span", "cap", t("before")), el("span", "cap", t("after")));
-      captions.setAttribute("aria-hidden", "true");
-      comparison.append(handle, slider);
-      screenshots.replaceChildren(el("figure", "comparison-figure", captions, comparison));
+      const toggle = el("button", "compare-toggle", t("showSlider"));
+      toggle.type = "button";
+      toggle.setAttribute("aria-haspopup", "dialog");
+      let dialog;
+      toggle.addEventListener("click", () => {
+        if (!dialog) {
+          dialog = renderComparison(step.action, sides.map((side) => picture(side, t(side))));
+          dialog.addEventListener("close", () => toggle.focus({ preventScroll: true }));
+          screenshots.append(dialog);
+        }
+        dialog.showModal();
+      });
+      screenshots.replaceChildren(toggle, pair);
     } else {
-      screenshots.replaceChildren(el("div", "single", ...sides.map((side) => {
-        const label = t(side);
-        return el("figure", "", el("figcaption", "label", label), el("div", "thumb", picture(side, label)));
-      })));
+      pair.classList.add("single");
+      screenshots.replaceChildren(pair);
     }
   }
 
@@ -380,6 +372,47 @@ function renderScreenshots(runId, step) {
   const content = el("div", "exhibit-body", screenshots);
   if (step.note) content.append(el("p", "note", step.note));
   return content;
+}
+
+function renderComparison(action, images) {
+  const label = t("comparison", { action });
+  const close = el("button", "compare-toggle", t("closeComparison"));
+  close.type = "button";
+  close.autofocus = true;
+  const handle = el("span", "handle");
+  handle.setAttribute("aria-hidden", "true");
+  const slider = el("input", "");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "100";
+  slider.value = "50";
+  slider.setAttribute("aria-label", label);
+  const [before, after] = images;
+  after.classList.add("after");
+  const comparison = el("div", "comparison", ...images, handle, slider);
+  const dialog = el("dialog", "compare-dialog",
+    el("header", "compare-head", el("h2", "", action), close),
+    el("div", "compare-captions label", el("span", "", t("before")), el("span", "", t("after"))),
+    el("div", "compare-viewport", comparison));
+  dialog.setAttribute("aria-label", label);
+  close.addEventListener("click", () => dialog.close());
+  const update = () => {
+    comparison.style.setProperty("--position", `${slider.value}%`);
+    const position = Number(slider.value) / 100;
+    slider.setAttribute("aria-valuetext", t("position", {
+      before: formats.percent.format(position), after: formats.percent.format(1 - position),
+    }));
+  };
+  const sizeFrame = () => {
+    const width = Math.max(before.naturalWidth, after.naturalWidth);
+    const height = Math.max(before.naturalHeight, after.naturalHeight);
+    if (width && height) comparison.style.setProperty("--capture-ratio", width / height);
+  };
+  for (const image of images) image.addEventListener("load", sizeFrame);
+  sizeFrame();
+  slider.addEventListener("input", update);
+  update();
+  return dialog;
 }
 
 function renderCheck(check) {
