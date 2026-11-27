@@ -5,6 +5,7 @@ const { get } = require("node:http");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { test } = require("node:test");
+const { pathToFileURL } = require("node:url");
 const { promisify } = require("node:util");
 const { runInNewContext } = require("node:vm");
 const { startViewer } = require("../dist/viewer");
@@ -148,16 +149,18 @@ test("viewer serves only supported referenced images inside their owning run", a
 });
 
 const chromium = process.env.ALIBAI_TEST_CHROMIUM;
+const dumpChromium = async (url, profile) => (await promisify(execFile)(chromium, [
+  "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+  "--virtual-time-budget=3000", "--dump-dom", `--user-data-dir=${profile}`, url,
+], { timeout: 10000 })).stdout;
+
 test("viewer renders case files and exhibits in Chromium", { skip: !chromium, timeout: 25000 }, async (t) => {
   const { url, root, runs, run, directory } = await fixture(t);
   delete run.steps[1].before;
   run.checks.push({ ...run.checks.at(-1), id: otherId, target: "parseOptionalCoupon(code)", expected: null });
   await writeFile(join(directory, "run.json"), JSON.stringify(run));
   const localhostUrl = url.replace("127.0.0.1", "localhost");
-  const dump = async (path, profile) => (await promisify(execFile)(chromium, [
-    "--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-    "--virtual-time-budget=3000", "--dump-dom", `--user-data-dir=${join(root, profile)}`, localhostUrl + path,
-  ], { timeout: 10000 })).stdout;
+  const dump = (path, profile) => dumpChromium(localhostUrl + path, join(root, profile));
   const list = await dump("?lang=en", "list-profile");
   assert.match(list, /1 invalid run skipped/);
   assert.match(list, /&lt;img src=x onerror=alert\(1\)&gt; Basket/);
@@ -216,4 +219,58 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.doesNotMatch(changed, /<details open|<img\b/);
   assert.match(changedKo, /커밋되지 않은 변경 사항 \(파일 2개, 해시 a{12}\)/);
   assert.match(changedJa, /未コミットの変更（2 ファイル、ハッシュ a{12}）/);
+});
+
+test("full-screen comparison fits tall screenshots in short and narrow viewports", { skip: !chromium, timeout: 15000 }, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "alibai-comparison-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  async function measure() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 390;
+    canvas.height = 5000;
+    const images = [new Image(), new Image()];
+    const src = canvas.toDataURL("image/png");
+    for (const image of images) {
+      image.className = "shot";
+      image.src = src;
+    }
+    await Promise.all(images.map((image) => image.decode()));
+    const dialog = renderComparison("Tall captures", images);
+    document.body.append(dialog);
+    dialog.showModal();
+    const captions = dialog.querySelector(".compare-captions").getBoundingClientRect();
+    const { width, height, top, bottom } = dialog.querySelector(".comparison").getBoundingClientRect();
+    parent.postMessage({
+      locale: document.documentElement.lang, viewport: [innerWidth, innerHeight],
+      width, height, top, bottom, captionsBottom: captions.bottom, scrollHeight: dialog.scrollHeight,
+    }, "*");
+  }
+  const script = join(root, "measure.js");
+  await writeFile(script, `(${measure})();`);
+  const index = await readFile(join(viewer, "index.html"), "utf8");
+  await writeFile(join(root, "probe.html"), index
+    .replace("<head>", `<head><base href="${pathToFileURL(viewer + "/")}">`)
+    .replace("</head>", `<script defer src="${pathToFileURL(script)}"></script></head>`));
+  const viewports = [[320, 740], [667, 230]];
+  const locales = ["en", "ko", "ja"];
+  const frames = viewports.flatMap(([width, height]) => locales.map((locale) =>
+    `<iframe width="${width}" height="${height}" src="./probe.html?lang=${locale}"></iframe>`));
+  const page = join(root, "viewports.html");
+  await writeFile(page, `<!doctype html><script>
+    addEventListener("message", ({ data }) => {
+      document.body.appendChild(document.createElement("output")).textContent = JSON.stringify(data);
+    });
+    </script><body>${frames.join("")}</body>`);
+  const html = await dumpChromium(pathToFileURL(page).href, join(root, "profile"));
+  const results = [...html.matchAll(/<output>(.*?)<\/output>/g)].map(([, result]) => JSON.parse(result));
+  assert.equal(results.length, frames.length);
+  for (const viewport of viewports) {
+    for (const locale of locales) {
+      const result = results.find((item) => item.locale === locale && String(item.viewport) === String(viewport));
+      assert.ok(result, `Missing result for ${locale} at ${viewport}`);
+      const { width, height, top, bottom, captionsBottom, scrollHeight } = result;
+      assert.ok(Math.abs(width / height - 390 / 5000) < .002, JSON.stringify(result));
+      assert.ok(top >= captionsBottom && bottom <= viewport[1] && scrollHeight <= viewport[1], JSON.stringify(result));
+    }
+  }
 });

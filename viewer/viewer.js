@@ -387,14 +387,13 @@ function renderComparison(action, images) {
   slider.max = "100";
   slider.value = "50";
   slider.setAttribute("aria-label", label);
-  images[1].classList.add("after");
+  const [before, after] = images;
+  after.classList.add("after");
   const comparison = el("div", "comparison", ...images, handle, slider);
-  const frame = el("div", "compare-frame",
-    el("div", "compare-captions label", el("span", "", t("before")), el("span", "", t("after"))),
-    comparison);
   const dialog = el("dialog", "compare-dialog",
     el("header", "compare-head", el("h2", "", action), close),
-    el("div", "compare-viewport", frame));
+    el("div", "compare-captions label", el("span", "", t("before")), el("span", "", t("after"))),
+    el("div", "compare-viewport", comparison));
   dialog.setAttribute("aria-label", label);
   close.addEventListener("click", () => dialog.close());
   const update = () => {
@@ -405,9 +404,9 @@ function renderComparison(action, images) {
     }));
   };
   const sizeFrame = () => {
-    const width = Math.max(...images.map((image) => image.naturalWidth));
-    const height = Math.max(...images.map((image) => image.naturalHeight));
-    if (width && height) frame.style.setProperty("--capture-ratio", width / height);
+    const width = Math.max(before.naturalWidth, after.naturalWidth);
+    const height = Math.max(before.naturalHeight, after.naturalHeight);
+    if (width && height) comparison.style.setProperty("--capture-ratio", width / height);
   };
   for (const image of images) image.addEventListener("load", sizeFrame);
   sizeFrame();
