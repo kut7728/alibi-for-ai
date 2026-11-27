@@ -324,16 +324,29 @@ test("full-screen screenshot dialogs fit extreme images and survive rapid reopen
 
 test("screenshot copy feedback stays visible at the control and an unrelated failed image leaves preview open", { skip: !chromium, timeout: 15000 }, async (t) => {
   async function measure() {
-    const canvas = document.createElement("canvas");
-    canvas.width = 390;
-    canvas.height = 5000;
-    const tall = canvas.toDataURL();
-    canvas.height = 244;
-    const short = canvas.toDataURL();
+    if (app.hasAttribute("aria-busy")) {
+      await new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (app.hasAttribute("aria-busy")) return;
+          observer.disconnect();
+          resolve();
+        });
+        observer.observe(app, { attributeFilter: ["aria-busy"] });
+      });
+    }
+    const pixel = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
     const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
     Object.defineProperty(HTMLImageElement.prototype, "src", {
-      ...src, set(value) { src.set.call(this, value.endsWith("/tall.png") ? tall : short); },
+      ...src,
+      set(value) {
+        this.style.height = value.endsWith("/tall.png") ? "5000px" : "155px";
+        src.set.call(this, pixel);
+      },
     });
+    window.ClipboardItem = class {
+      constructor(data) { this.data = data; }
+      getType(type) { return this.data[type]; }
+    };
 
     const screenshots = () => renderScreenshots("probe", {
       action: "Sample evidence", before: "screenshots/tall.png", after: "screenshots/short.png",
@@ -341,7 +354,6 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
     const gallery = screenshots();
     document.body.append(gallery);
     const copy = gallery.querySelector(".shot-copy");
-    await copy.parentNode.querySelector("img").decode();
     copy.scrollIntoView({ block: "center" });
     copy.focus({ preventScroll: true });
     const status = document.querySelector(".copy-status");
@@ -412,11 +424,9 @@ test("screenshot copy feedback stays visible at the control and an unrelated fai
       const buttons = pair.querySelectorAll(".shot-open");
       const trigger = buttons[healthyIndex];
       const failed = buttons[1 - healthyIndex];
-      await trigger.firstElementChild.decode();
       trigger.focus();
       trigger.click();
       const dialog = pair.querySelector("dialog");
-      await dialog.querySelector("img").decode();
       failed.firstElementChild.dispatchEvent(new Event("error"));
       const survived = dialog.open && trigger.isConnected;
       const fallback = pair.querySelector(".missing")?.textContent;
