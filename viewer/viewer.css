@@ -223,6 +223,7 @@ tbody tr:hover td:first-child, tbody tr:focus-within td:first-child { box-shadow
 }
 .case-navigation .icon-control:first-child { left: -1px; transform: translate(-50%, -50%); }
 .case-navigation .icon-control:last-child { right: -1px; transform: translate(50%, -50%); }
+.case-navigation .icon-control:focus-visible { outline-offset: 1px; }
 .case-navigation a.icon-control:hover { background: #e9ecf1; border-color: #14171d; }
 .case-navigation .icon-control:disabled {
   opacity: 1;
