@@ -39,3 +39,16 @@ test("Pages builds the public run and only its referenced evidence", async (t) =
     await assert.rejects(buildPages(root), /without symlinks/);
   }
 });
+
+test("Pages rejects a viewer template without the expected HTML marker", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "alibai-pages-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const name of ["viewer", "examples/cart-rounding"]) {
+    await cp(join(__dirname, "..", name), join(root, name), { recursive: true });
+  }
+  const index = join(root, "viewer/index.html");
+  const html = await readFile(index, "utf8");
+  await writeFile(index, html.replace('<html lang="en">', '<html lang="en" dir="ltr">'));
+
+  await assert.rejects(buildPages(root), /Expected <html lang="en"> in viewer\/index\.html/);
+});
