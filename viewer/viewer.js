@@ -383,15 +383,6 @@ function renderScreenshots(runId, step) {
     return img;
   }
 
-  function openDialog(dialog, trigger) {
-    dialog.addEventListener("close", () => {
-      dialog.remove();
-      if (trigger.isConnected) trigger.focus({ preventScroll: true });
-    }, { once: true });
-    screenshots.append(dialog);
-    dialog.showModal();
-  }
-
   function draw() {
     const pair = el("div", "screenshot-pair", ...sides.map((side) => {
       const label = t(side);
@@ -402,9 +393,12 @@ function renderScreenshots(runId, step) {
         enlarge.type = "button";
         enlarge.setAttribute("aria-label", t("enlargeScreenshot", { label, action: step.action }));
         enlarge.setAttribute("aria-haspopup", "dialog");
-        enlarge.addEventListener("click", () => openDialog(
-          screenshotDialog(image.alt, image.alt, "closeScreenshot", el("div", "image-viewport", picture(side, label))),
-          enlarge));
+        enlarge.addEventListener("click", () => {
+          const dialog = screenshotDialog(image.alt, image.alt, "closeScreenshot",
+            el("div", "image-viewport", picture(side, label)));
+          dialog.addEventListener("close", () => dialog.remove(), { once: true });
+          showScreenshotDialog(screenshots, dialog, enlarge);
+        });
         const copy = iconControl(el("button", "icon-control shot-copy"), t("copyScreenshot", { label, action: step.action }),
           "M8 8h12v12H8z M16 8V4H4v12h4");
         copy.type = "button";
@@ -433,7 +427,7 @@ function renderScreenshots(runId, step) {
       toggle.type = "button";
       toggle.setAttribute("aria-haspopup", "dialog");
       let dialog;
-      toggle.addEventListener("click", () => openDialog(
+      toggle.addEventListener("click", () => showScreenshotDialog(screenshots,
         dialog ??= renderComparison(step.action, sides.map((side) => picture(side, t(side)))), toggle));
       pair.after(toggle);
     } else {
@@ -448,6 +442,17 @@ function renderScreenshots(runId, step) {
   const content = el("div", "exhibit-body", screenshots);
   if (step.note) content.append(el("p", "note", step.note));
   return content;
+}
+
+function showScreenshotDialog(container, dialog, trigger) {
+  if (!dialog.isConnected) {
+    dialog.addEventListener("close", () => {
+      // A close event can arrive after the comparison has reopened.
+      if (!dialog.open && trigger.isConnected) trigger.focus({ preventScroll: true });
+    });
+    container.append(dialog);
+  }
+  dialog.showModal();
 }
 
 function screenshotDialog(label, title, closeLabel, ...content) {

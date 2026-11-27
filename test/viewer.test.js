@@ -229,7 +229,7 @@ test("viewer renders case files and exhibits in Chromium", { skip: !chromium, ti
   assert.match(changed, /<button[^>]*disabled[^>]*aria-label="Next case"/);
 });
 
-test("full-screen screenshot dialogs fit extreme images in short and narrow viewports", { skip: !chromium, timeout: 15000 }, async (t) => {
+test("full-screen screenshot dialogs fit extreme images and survive rapid reopen", { skip: !chromium, timeout: 15000 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), "alibai-comparison-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   async function measure() {
@@ -244,11 +244,18 @@ test("full-screen screenshot dialogs fit extreme images in short and narrow view
     }
     await Promise.all(images.map((image) => image.decode()));
     const dialog = renderComparison("Tall captures", images);
-    document.body.append(dialog);
-    dialog.showModal();
+    const trigger = el("button", "", "Open comparison");
+    document.body.append(trigger);
+    showScreenshotDialog(document.body, dialog, trigger);
     const captions = dialog.querySelector(".compare-captions").getBoundingClientRect();
     const { width, height, top, bottom } = dialog.querySelector(".comparison").getBoundingClientRect();
     const scrollHeight = dialog.scrollHeight;
+    const slider = dialog.querySelector("input");
+    slider.value = "70";
+    dialog.close();
+    showScreenshotDialog(document.body, dialog, trigger);
+    dialog.dispatchEvent(new Event("close"));
+    const reopened = dialog.open && dialog.isConnected && slider.value === "70";
     dialog.close();
     const previews = [];
     for (const dimensions of [[390, 5000], [5000, 100]]) {
@@ -271,7 +278,7 @@ test("full-screen screenshot dialogs fit extreme images in short and narrow view
     }
     parent.postMessage({
       locale: document.documentElement.lang, viewport: [innerWidth, innerHeight],
-      width, height, top, bottom, captionsBottom: captions.bottom, scrollHeight, previews,
+      width, height, top, bottom, captionsBottom: captions.bottom, scrollHeight, previews, reopened,
     }, "*");
   }
   const script = join(root, "measure.js");
@@ -297,9 +304,10 @@ test("full-screen screenshot dialogs fit extreme images in short and narrow view
     for (const locale of locales) {
       const result = results.find((item) => item.locale === locale && String(item.viewport) === String(viewport));
       assert.ok(result, `Missing result for ${locale} at ${viewport}`);
-      const { width, height, top, bottom, captionsBottom, scrollHeight, previews } = result;
+      const { width, height, top, bottom, captionsBottom, scrollHeight, previews, reopened } = result;
       assert.ok(Math.abs(width / height - 390 / 5000) < .002, JSON.stringify(result));
       assert.ok(top >= captionsBottom && bottom <= viewport[1] && scrollHeight <= viewport[1], JSON.stringify(result));
+      assert.equal(reopened, true);
       assert.equal(previews.length, 2);
       for (const preview of previews) {
         assert.equal(preview.fit, "contain");
