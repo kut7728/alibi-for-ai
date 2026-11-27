@@ -279,7 +279,7 @@ function showCase(run) {
   const exhibits = timeline(run);
   const result = run.verdict ?? "open";
   const count = (result) => exhibits.filter(({ item }) => item.result === result).length;
-  const [passed, failed, total] = [
+  const counts = [
     ["passed", count("pass"), "pass"], ["failed", count("fail"), "fail"], ["exhibits", exhibits.length, ""],
   ].map(([label, number, tone]) => el("div", tone && number ? `count ${tone}` : "count",
     el("b", "", formats.count.format(number)), el("span", "", t(label))));
@@ -321,10 +321,10 @@ function showCase(run) {
   navigation.setAttribute("aria-label", t("caseNavigation"));
   const back = iconControl(link("", "#", "icon-control case-back"), t("back"), "M19 12H5m7-7-7 7 7 7");
   const caseHeader = el("header", "case-header", el("div", "case-heading", back, caseIdentity),
-    el("div", "counts", passed, failed));
+    el("div", "counts", ...counts));
   const summary = el("section", "summary", caseHeader, title);
   if (run.summary) summary.append(el("p", "note", run.summary));
-  summary.append(el("div", "counts", total), meta);
+  summary.append(meta);
   const evidence = el("section", "evidence",
     el("h2", "", t("timeline")),
     exhibits.length ? el("ol", "timeline", ...exhibits.map((exhibit, index) => renderExhibit(run, exhibit, index)))
