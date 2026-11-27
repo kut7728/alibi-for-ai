@@ -5,6 +5,11 @@ const breadcrumb = document.getElementById("breadcrumb");
 const theme = document.getElementById("theme");
 const languages = document.getElementById("languages");
 const languageButtons = languages.querySelectorAll("button");
+const copyStatus = el("p", "copy-status");
+copyStatus.setAttribute("role", "status");
+document.body.append(copyStatus);
+let copying = false;
+let copyTimeout;
 const themes = ["System", "Light", "Dark"];
 let themeIndex = Math.max(0, themes.indexOf(readPreference("alibai-theme")));
 const url = new URL(location.href);
@@ -51,6 +56,20 @@ function link(text, href, className) {
   return node;
 }
 
+function iconControl(control, label, path) {
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const stroke = document.createElementNS(namespace, "path");
+  stroke.setAttribute("d", path);
+  svg.append(stroke);
+  control.append(svg);
+  control.setAttribute("aria-label", label);
+  control.title = label;
+  return control;
+}
+
 function timestamp(value, compact = false) {
   if (!value) return el("span", "muted", t("notRecorded"));
   const node = el("time", "mono", (compact ? formats.compact : formats.timestamp).format(new Date(value)));
@@ -87,9 +106,6 @@ function applyLocale() {
     timestamp: new Intl.DateTimeFormat(locale, { ...date, timeZoneName: "short" }),
     count: new Intl.NumberFormat(locale),
     percent: new Intl.NumberFormat(locale, { style: "percent" }),
-    seconds: new Intl.NumberFormat(locale, {
-      style: "unit", unit: "second", minimumFractionDigits: 3, maximumFractionDigits: 3, signDisplay: "always",
-    }),
   };
   document.documentElement.lang = locale;
   document.querySelector(".logo").setAttribute("aria-label", t("homeLabel"));
@@ -115,6 +131,13 @@ for (const button of languageButtons) {
   });
 }
 applyLocale();
+
+function visibleRuns() {
+  const term = query.trim().toLowerCase();
+  return files.runs.filter((run) =>
+    (filter === "all" || run.verdict === filter) &&
+    [run.title, run.git.branch ?? ""].some((value) => value.toLowerCase().includes(term)));
+}
 
 function showList() {
   const controls = el("div", "filters");
@@ -157,10 +180,7 @@ function showList() {
 
   function updateRows() {
     for (const { key, button } of buttons) button.setAttribute("aria-pressed", String(key === filter));
-    const term = query.trim().toLowerCase();
-    const matching = files.runs.filter((run) =>
-      (filter === "all" || run.verdict === filter) &&
-      [run.title, run.git.branch ?? ""].some((value) => value.toLowerCase().includes(term)));
+    const matching = visibleRuns();
     rows.replaceChildren(...matching.map((run) => {
       const result = run.verdict ?? "open";
       const exhibits = [...run.steps, ...run.checks];
@@ -287,7 +307,23 @@ function showCase(run) {
   appendGitChanges(meta, run.git);
   const caseHeader = el("div", "case-header",
     el("p", "label", t("caseNumber", { id: run.id.slice(0, 8) })), badge(result, verdicts[result]));
-  const summary = el("section", "summary", caseHeader, title);
+  const cases = visibleRuns();
+  const position = cases.indexOf(run);
+  const arrow = (offset, label, path) => {
+    const neighbor = position < 0 ? undefined : cases[position + offset];
+    const control = neighbor ? link("", `#case/${neighbor.id}`, "icon-control") : el("button", "icon-control");
+    if (!neighbor) {
+      control.type = "button";
+      control.disabled = true;
+    }
+    return iconControl(control, t(label), path);
+  };
+  const navigation = el("nav", "case-navigation",
+    arrow(-1, "previousCase", "m15 5-7 7 7 7"),
+    link(t("back"), "#", "case-back"),
+    arrow(1, "nextCase", "m9 5 7 7-7 7"));
+  navigation.setAttribute("aria-label", t("caseNavigation"));
+  const summary = el("section", "summary", navigation, caseHeader, title);
   if (run.summary) summary.append(el("p", "note", run.summary));
   summary.append(counts, meta);
   app.append(summary);
@@ -306,79 +342,162 @@ function renderExhibit(run, { kind, item }, index) {
   const number = index < 26 ? String.fromCharCode(65 + index) : formats.count.format(index + 1);
   const header = el("header", "exhibit-head", el("span", "tag", t("exhibitNumber", { number })),
     el("span", "kind mono", t(isStep ? "uiStep" : "logicCheck")), titleNode);
-  if (item.createdAt) {
-    const seconds = (Date.parse(item.createdAt) - Date.parse(run.createdAt)) / 1000;
-    const time = el("time", "exhibit-time mono", formats.seconds.format(seconds));
-    time.dateTime = item.createdAt;
-    time.title = item.createdAt;
-    header.append(time);
-  }
   header.append(badge(item.result, item.result));
   const content = isStep ? renderScreenshots(run.id, item) : renderCheck(item);
   return el("li", `exhibit ${item.result}`, header, content);
 }
 
+async function screenshotPng(image) {
+  await image.decode();
+  if (new URL(image.src).pathname.toLowerCase().endsWith(".png")) {
+    const response = await fetch(image.src);
+    if (!response.ok) throw new Error("Screenshot unavailable");
+    return response.blob();
+  }
+  const canvas = el("canvas", "");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  canvas.getContext("2d").drawImage(image, 0, 0);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG encoding failed")), "image/png");
+  });
+}
+
+function showCopyStatus(button, message, label) {
+  clearTimeout(copyTimeout);
+  copyStatus.textContent = t(message, { label });
+  const anchor = button.getBoundingClientRect();
+  const { width, height } = copyStatus.getBoundingClientRect();
+  const viewport = document.documentElement;
+  const gap = 8;
+  const below = anchor.bottom + gap;
+  const bottom = viewport.clientHeight - gap - height;
+  const top = below <= bottom ? below : anchor.top - gap - height;
+  copyStatus.style.top = `${Math.max(gap, Math.min(top, bottom))}px`;
+  copyStatus.style.left = `${Math.max(gap, Math.min(anchor.right, viewport.clientWidth - gap) - width)}px`;
+}
+
+async function copyScreenshot(image, button, label) {
+  if (copying) {
+    showCopyStatus(button, "screenshotCopyBusy");
+    return;
+  }
+  copying = true;
+  showCopyStatus(button, "screenshotCopyPending", label);
+  let png;
+  let message;
+  try {
+    // Start the clipboard write within the gesture, even when PNG data is still pending.
+    if (!navigator.clipboard?.write || !window.ClipboardItem) throw new Error("Image clipboard unavailable");
+    png = screenshotPng(image);
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    message = "screenshotCopied";
+  } catch {
+    png?.catch(() => {});
+    message = "screenshotCopyFailed";
+  } finally {
+    copying = false;
+  }
+  if (button.isConnected) showCopyStatus(button, message, label);
+  else copyStatus.textContent = "";
+  copyTimeout = setTimeout(() => { copyStatus.textContent = ""; }, 4000);
+}
+
 function renderScreenshots(runId, step) {
   const screenshots = el("div", "screenshots");
-  const failed = new Set();
-  const sides = ["before", "after"];
-
-  function picture(side, label) {
-    if (!step[side] || failed.has(side)) {
-      return el("div", "missing", t(failed.has(side) ? "screenshotError" : "noScreenshot"));
+  const pair = el("div", "screenshot-pair");
+  let toggle;
+  let comparison;
+  const pictures = ["before", "after"].map((side) => {
+    const label = t(side);
+    const thumb = el("div", "thumb");
+    pair.append(el("figure", "", el("figcaption", "label", label), thumb));
+    if (!step[side]) {
+      thumb.append(el("div", "missing", t("noScreenshot")));
+      return null;
     }
-    const img = el("img", "shot");
-    img.alt = t("screenshotAlt", { label, action: step.action });
-    img.addEventListener("error", () => {
-      if (failed.has(side)) return;
-      failed.add(side);
-      const hadFocus = screenshots.contains(document.activeElement);
-      draw();
-      if (hadFocus) screenshots.focus();
-    }, { once: true });
-    img.src = `./screenshots/${runId}/${encodeURIComponent(step[side].split("/")[1])}`;
-    return img;
-  }
 
-  function draw() {
-    const pair = el("div", "screenshot-pair", ...sides.map((side) => {
-      const label = t(side);
-      return el("figure", "", el("figcaption", "label", label), el("div", "thumb", picture(side, label)));
-    }));
-    if (step.before && step.after && failed.size === 0) {
-      const toggle = el("button", "compare-toggle", t("showSlider"));
-      toggle.type = "button";
-      toggle.setAttribute("aria-haspopup", "dialog");
-      let dialog;
-      toggle.addEventListener("click", () => {
-        if (!dialog) {
-          dialog = renderComparison(step.action, sides.map((side) => picture(side, t(side))));
-          dialog.addEventListener("close", () => toggle.focus({ preventScroll: true }));
-          screenshots.append(dialog);
-        }
-        dialog.showModal();
-      });
-      screenshots.replaceChildren(toggle, pair);
-    } else {
-      pair.classList.add("single");
-      screenshots.replaceChildren(pair);
-    }
-  }
+    let preview;
+    const unavailable = () => {
+      if (!enlarge.isConnected) return;
+      const focus = document.activeElement;
+      const restoreFocus = thumb.contains(focus) || focus === toggle || preview?.open || comparison?.open;
+      preview?.close();
+      comparison?.close();
+      comparison?.remove();
+      toggle?.remove();
+      thumb.replaceChildren(el("div", "missing", t("screenshotError")));
+      if (restoreFocus) screenshots.focus({ preventScroll: true });
+    };
+    const picture = () => {
+      const img = el("img", "shot");
+      img.alt = t("screenshotAlt", { label, action: step.action });
+      img.addEventListener("error", unavailable, { once: true });
+      img.src = `./screenshots/${runId}/${encodeURIComponent(step[side].split("/")[1])}`;
+      return img;
+    };
+    const image = picture();
+    const enlarge = el("button", "shot-open", image);
+    enlarge.type = "button";
+    enlarge.setAttribute("aria-label", t("enlargeScreenshot", { label, action: step.action }));
+    enlarge.setAttribute("aria-haspopup", "dialog");
+    enlarge.addEventListener("click", () => {
+      const dialog = screenshotDialog(image.alt, image.alt, "closeScreenshot",
+        el("div", "image-viewport", picture()));
+      preview = dialog;
+      dialog.addEventListener("close", () => dialog.remove(), { once: true });
+      showScreenshotDialog(screenshots, dialog, enlarge);
+    });
+    const copy = iconControl(el("button", "icon-control shot-copy"), t("copyScreenshot", { label, action: step.action }),
+      "M8 8h12v12H8z M16 8V4H4v12h4");
+    copy.type = "button";
+    copy.addEventListener("click", () => copyScreenshot(image, copy, label));
+    thumb.append(enlarge, copy);
+    return picture;
+  });
 
   screenshots.tabIndex = -1;
   screenshots.setAttribute("role", "group");
   screenshots.setAttribute("aria-label", t("screenshots"));
-  draw();
+  screenshots.append(pair);
+  if (pictures.every(Boolean)) {
+    toggle = iconControl(el("button", "icon-control compare-toggle"), t("showSlider"),
+      "M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5m8-11v16");
+    toggle.type = "button";
+    toggle.setAttribute("aria-haspopup", "dialog");
+    toggle.addEventListener("click", () => showScreenshotDialog(screenshots,
+      comparison ??= renderComparison(step.action, pictures.map((picture) => picture())), toggle));
+    screenshots.append(toggle);
+  } else pair.classList.add("single");
   const content = el("div", "exhibit-body", screenshots);
   if (step.note) content.append(el("p", "note", step.note));
   return content;
 }
 
-function renderComparison(action, images) {
-  const label = t("comparison", { action });
-  const close = el("button", "compare-toggle", t("closeComparison"));
+function showScreenshotDialog(container, dialog, trigger) {
+  if (!dialog.isConnected) {
+    dialog.addEventListener("close", () => {
+      // A close event can arrive after the comparison has reopened.
+      if (!dialog.open && trigger.isConnected) trigger.focus({ preventScroll: true });
+    });
+    container.append(dialog);
+  }
+  dialog.showModal();
+}
+
+function screenshotDialog(label, title, closeLabel, ...content) {
+  const close = el("button", "dialog-close", t(closeLabel));
   close.type = "button";
   close.autofocus = true;
+  const dialog = el("dialog", "screenshot-dialog",
+    el("header", "compare-head", el("h2", "", title), close), ...content);
+  dialog.setAttribute("aria-label", label);
+  close.addEventListener("click", () => dialog.close());
+  return dialog;
+}
+
+function renderComparison(action, images) {
+  const label = t("comparison", { action });
   const handle = el("span", "handle");
   handle.setAttribute("aria-hidden", "true");
   const slider = el("input", "");
@@ -390,12 +509,10 @@ function renderComparison(action, images) {
   const [before, after] = images;
   after.classList.add("after");
   const comparison = el("div", "comparison", ...images, handle, slider);
-  const dialog = el("dialog", "compare-dialog",
-    el("header", "compare-head", el("h2", "", action), close),
+  const dialog = screenshotDialog(label, action, "closeComparison",
     el("div", "compare-captions label", el("span", "", t("before")), el("span", "", t("after"))),
     el("div", "compare-viewport", comparison));
-  dialog.setAttribute("aria-label", label);
-  close.addEventListener("click", () => dialog.close());
+  dialog.classList.add("compare-dialog");
   const update = () => {
     comparison.style.setProperty("--position", `${slider.value}%`);
     const position = Number(slider.value) / 100;
@@ -439,6 +556,7 @@ function renderCheck(check) {
 }
 
 function render(moveFocus = false) {
+  copyStatus.textContent = "";
   document.title = `${t("caseFiles")} · alibai`;
   if (loadFailed) {
     app.replaceChildren(heading(t("caseFiles")), el("p", "error", t("loadError")));
